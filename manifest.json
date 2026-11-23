@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "清足迹 Clean My Footprints",
+  "version": "1.0.0",
+  "description": "一键清除浏览足迹：缓存、站点数据、Cookie、历史记录，并清理聊天应用里的会话记录。",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "browsingData",
+    "history",
+    "cookies",
+    "storage",
+    "tabs",
+    "scripting",
+    "alarms",
+    "favicon"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "清足迹 — 一键清理浏览足迹",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "打开清足迹面板"
+    }
+  }
+}

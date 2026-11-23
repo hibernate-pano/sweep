@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark light" />
+    <title>清足迹 · 设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="head">
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.6" class="mark-track" />
+            <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
+            <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
+          </svg>
+          <div>
+            <h1>清足迹</h1>
+            <p class="sub">一键清理浏览足迹 · 设置</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>外观</h2>
+        <div class="row">
+          <div class="row-label">
+            主题
+            <span class="hint">面板和设置页共用一套配色</span>
+          </div>
+          <div class="seg" id="theme-seg" role="radiogroup" aria-label="主题">
+            <button type="button" data-theme="system" role="radio">跟随系统</button>
+            <button type="button" data-theme="dark" role="radio">深色</button>
+            <button type="button" data-theme="light" role="radio">浅色</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>默认清理设置</h2>
+        <div class="row">
+          <div class="row-label">
+            默认范围
+            <span class="hint">打开面板时预选的范围</span>
+          </div>
+          <div class="seg" id="scope-seg" role="radiogroup" aria-label="默认范围">
+            <button type="button" data-scope="current" role="radio">当前网站</button>
+            <button type="button" data-scope="all" role="radio">全部网站</button>
+            <button type="button" data-scope="custom" role="radio">自选</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            默认清理项
+            <span class="hint">Cookie 会导致网站被登出，默认不勾选</span>
+          </div>
+          <div class="chips" id="item-chips" role="group" aria-label="默认清理项"></div>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            默认时间范围
+            <span class="hint">只影响历史记录和缓存的清理范围</span>
+          </div>
+          <div class="seg" id="since-seg" role="radiogroup" aria-label="默认时间范围"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>自选站点</h2>
+        <p class="card-sub">在「自选」范围下只清理这些网站。</p>
+        <div class="tag-list" id="custom-list"></div>
+        <form class="add-row" id="custom-form">
+          <input type="text" id="custom-input" placeholder="example.com" autocomplete="off" />
+          <button type="submit" class="btn">添加</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>保留登录状态</h2>
+        <p class="card-sub">
+          这些网站整站都不会被清理，登录状态和数据都保留。注意按主域名生效：填
+          <code>mail.google.com</code> 会保留整个 <code>google.com</code>，因为浏览器的 Cookie
+          无法按子域名单独删除。
+        </p>
+        <div class="tag-list" id="keep-list"></div>
+        <form class="add-row" id="keep-form">
+          <input type="text" id="keep-input" placeholder="mail.google.com" autocomplete="off" />
+          <button type="submit" class="btn">添加</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>自动清理</h2>
+        <div class="row">
+          <div class="row-label">
+            浏览器启动时
+            <span class="hint">按上面的默认范围执行一次</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="auto-startup" />
+            <span></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="row-label">
+            退出浏览器时
+            <span class="hint">关掉最后一个窗口时触发；失败会在下次启动时补做</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="auto-exit" />
+            <span></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="row-label">
+            每天定时
+            <span class="hint">到点自动执行一次</span>
+          </div>
+          <div class="switch-group">
+            <label class="switch">
+              <input type="checkbox" id="auto-daily" />
+              <span></span>
+            </label>
+            <input type="time" id="auto-daily-time" class="time-input" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>清理历史</h2>
+        <div class="history" id="history"></div>
+        <div class="row">
+          <div class="row-label"><span class="hint">只保存在本机</span></div>
+          <button type="button" class="btn btn-ghost" id="clear-history">清空记录</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>关于</h2>
+        <div class="about">
+          <p>
+            版本 <span id="version">—</span> · 快捷键
+            <kbd id="shortcut">—</kbd>（可在 Chrome 扩展快捷键页面修改）
+          </p>
+          <p class="hint">
+            扩展只在你点击按钮时才会删除数据，不会上传任何信息；所有设置和记录都保存在本机。
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

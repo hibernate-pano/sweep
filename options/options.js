@@ -1,0 +1,277 @@
+import { ITEM_DEFS, SCOPE, TIME_RANGES } from '../src/lib/constants.js';
+import { clearCleanHistory, getCleanHistory, getSettings, setSettings } from '../src/lib/settings.js';
+import { formatBytes, formatWhen, hostOf, registrableDomain } from '../src/lib/util.js';
+
+const $ = (id) => document.getElementById(id);
+
+let settings = null;
+
+/* ---------------------------------------------------------------- 主题 */
+
+function applyTheme(pref) {
+  const media = window.matchMedia('(prefers-color-scheme: light)');
+  const resolve = () => {
+    document.documentElement.dataset.theme =
+      pref === 'system' ? (media.matches ? 'light' : 'dark') : pref;
+  };
+  resolve();
+  media.addEventListener('change', () => {
+    if (pref === 'system') resolve();
+  });
+}
+
+/* ---------------------------------------------------------------- 初始化 */
+
+init().catch((err) => {
+  console.error(err);
+});
+
+async function init() {
+  settings = await getSettings();
+  applyTheme(settings.theme);
+
+  bindSegments();
+  renderTheme();
+  renderScope();
+  renderItems();
+  renderSince();
+  renderCustom();
+  renderKeep();
+  renderAuto();
+  await renderHistory();
+
+  const manifest = chrome.runtime.getManifest();
+  $('version').textContent = manifest.version;
+
+  try {
+    const commands = await chrome.commands.getAll();
+    const action = commands.find((c) => c.name === '_execute_action');
+    $('shortcut').textContent = (action && action.shortcut) || '未设置';
+  } catch {
+    $('shortcut').textContent = '未设置';
+  }
+}
+
+/* ---------------------------------------------------------------- 渲染 */
+
+function markActive(container, attribute, value) {
+  container.querySelectorAll('button').forEach((btn) => {
+    btn.setAttribute('aria-checked', String(btn.dataset[attribute] === value));
+  });
+}
+
+function renderTheme() {
+  markActive($('theme-seg'), 'theme', settings.theme);
+}
+
+function renderScope() {
+  markActive($('scope-seg'), 'scope', settings.scope);
+}
+
+/* 事件只绑定一次，渲染函数只负责更新选中态，避免重复绑定。 */
+function bindSegments() {
+  $('theme-seg').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button');
+    if (!btn) return;
+    settings = await setSettings({ theme: btn.dataset.theme });
+    applyTheme(settings.theme);
+    renderTheme();
+  });
+
+  $('scope-seg').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button');
+    if (!btn) return;
+    settings = await setSettings({ scope: btn.dataset.scope });
+    renderScope();
+  });
+}
+
+function renderItems() {
+  const box = $('item-chips');
+  box.textContent = '';
+  for (const def of ITEM_DEFS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip';
+    btn.textContent = def.label;
+    btn.title = def.hint;
+    btn.setAttribute('aria-pressed', String(Boolean(settings.items[def.key])));
+    btn.addEventListener('click', async () => {
+      const items = { ...settings.items };
+      items[def.key] = !items[def.key];
+      settings = await setSettings({ items });
+      renderItems();
+    });
+    box.appendChild(btn);
+  }
+}
+
+function renderSince() {
+  const seg = $('since-seg');
+  seg.textContent = '';
+  for (const range of TIME_RANGES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = range.label;
+    btn.dataset.since = range.id;
+    btn.setAttribute('aria-checked', String(settings.since === range.id));
+    btn.addEventListener('click', async () => {
+      settings = await setSettings({ since: range.id });
+      renderSince();
+    });
+    seg.appendChild(btn);
+  }
+}
+
+function renderCustom() {
+  const box = $('custom-list');
+  box.textContent = '';
+  if (!settings.customOrigins.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '还没有自选站点';
+    box.appendChild(empty);
+  }
+  for (const origin of settings.customOrigins) {
+    box.appendChild(makeTag(hostOf(origin), async () => {
+      settings = await setSettings({
+        customOrigins: settings.customOrigins.filter((o) => o !== origin),
+      });
+      renderCustom();
+    }));
+  }
+}
+
+function renderKeep() {
+  const box = $('keep-list');
+  box.textContent = '';
+  if (!settings.keepLogin.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '还没有需要保留登录的网站';
+    box.appendChild(empty);
+  }
+  for (const host of settings.keepLogin) {
+    box.appendChild(makeTag(host, async () => {
+      settings = await setSettings({
+        keepLogin: settings.keepLogin.filter((h) => h !== host),
+      });
+      renderKeep();
+    }));
+  }
+}
+
+function makeTag(label, onRemove) {
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = label;
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.textContent = '×';
+  remove.title = '移除';
+  remove.addEventListener('click', onRemove);
+
+  tag.appendChild(remove);
+  return tag;
+}
+
+function renderAuto() {
+  $('auto-startup').checked = Boolean(settings.auto.onStartup);
+  $('auto-exit').checked = Boolean(settings.auto.onExit);
+  $('auto-daily').checked = Boolean(settings.auto.daily);
+  $('auto-daily-time').value = settings.auto.dailyTime;
+  $('auto-daily-time').disabled = !settings.auto.daily;
+}
+
+async function renderHistory() {
+  const box = $('history');
+  const history = await getCleanHistory();
+  box.textContent = '';
+
+  if (!history.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '还没有清理记录';
+    box.appendChild(empty);
+    return;
+  }
+
+  for (const entry of history) {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+
+    const when = document.createElement('span');
+    when.className = 'h-when';
+    const scopeLabel =
+      entry.scope === SCOPE.ALL ? '全部网站' : entry.scope === SCOPE.CUSTOM ? '自选站点' : '当前网站';
+    when.textContent = `${formatWhen(entry.ts)} · ${scopeLabel}${entry.auto ? ` · ${entry.auto}` : ''}`;
+
+    const meta = document.createElement('span');
+    meta.className = 'h-meta';
+    const parts = [];
+    if (entry.freed) parts.push(`释放 ${formatBytes(entry.freed)}`);
+    if (entry.historyRemoved) parts.push(`${entry.historyRemoved} 条历史`);
+    meta.textContent = parts.join(' · ') || '已完成';
+
+    row.append(when, meta);
+    box.appendChild(row);
+  }
+}
+
+/* ---------------------------------------------------------------- 事件 */
+
+$('custom-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = $('custom-input');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const host = hostOf(raw.includes('://') ? raw : `https://${raw}`);
+  if (!host) return;
+  const origin = `https://${host}`;
+  if (!settings.customOrigins.includes(origin)) {
+    settings = await setSettings({ customOrigins: [...settings.customOrigins, origin] });
+    renderCustom();
+  }
+  input.value = '';
+});
+
+$('keep-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = $('keep-input');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const host = registrableDomain(hostOf(raw.includes('://') ? raw : `https://${raw}`));
+  if (!host) return;
+  if (!settings.keepLogin.includes(host)) {
+    settings = await setSettings({ keepLogin: [...settings.keepLogin, host] });
+    renderKeep();
+  }
+  input.value = '';
+});
+
+$('auto-startup').addEventListener('change', async (event) => {
+  settings = await setSettings({ auto: { ...settings.auto, onStartup: event.target.checked } });
+  renderAuto();
+});
+
+$('auto-exit').addEventListener('change', async (event) => {
+  settings = await setSettings({ auto: { ...settings.auto, onExit: event.target.checked } });
+  renderAuto();
+});
+
+$('auto-daily').addEventListener('change', async (event) => {
+  settings = await setSettings({ auto: { ...settings.auto, daily: event.target.checked } });
+  renderAuto();
+});
+
+$('auto-daily-time').addEventListener('change', async (event) => {
+  const value = event.target.value || '23:30';
+  settings = await setSettings({ auto: { ...settings.auto, dailyTime: value } });
+  renderAuto();
+});
+
+$('clear-history').addEventListener('click', async () => {
+  await clearCleanHistory();
+  await renderHistory();
+});
