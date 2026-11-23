@@ -141,6 +141,13 @@ export async function runClean({
     }
   };
 
+  // 跳过的步骤也要报到进度里，否则进度条会停在半路。
+  const skip = (key, note) => {
+    index += 1;
+    onProgress(key, index, total);
+    report.items.push(resultRow(key, 'skipped', note));
+  };
+
   try {
     if (scope === 'all') {
       const base = { since, originTypes: WEB_ORIGIN_TYPES };
@@ -162,11 +169,11 @@ export async function runClean({
         if (items.cache) await run('cache', toDataTypeSet(['cache']), every);
         if (items.siteData) {
           if (targets.length) await run('siteData', toDataTypeSet(['siteData']), unprotected);
-          else report.items.push(resultRow('siteData', 'skipped', '已保留'));
+          else skip('siteData', '已保留');
         }
         if (items.cookies) {
           if (targets.length) await run('cookies', toDataTypeSet(['cookies']), unprotected);
-          else report.items.push(resultRow('cookies', 'skipped', '已保留'));
+          else skip('cookies', '已保留');
         }
       }
     }

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Clean My Webbrowser",
+  "name": "Clear Browsing Data",
   "version": "1.0.0",
   "description": "一键清除浏览足迹：缓存、站点数据、Cookie、历史记录。",
   "minimum_chrome_version": "116",
@@ -21,7 +21,7 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "Clean My Webbrowser — 一键清理浏览足迹",
+    "default_title": "Clear Browsing Data — 一键清理浏览足迹",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -45,7 +45,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "打开 Clean My Webbrowser 面板"
+      "description": "打开 Clear Browsing Data 面板"
     }
   }
 }

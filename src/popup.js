@@ -235,6 +235,7 @@ function renderLegend(items) {
   for (const item of items) {
     const li = document.createElement('li');
     li.dataset.key = item.key;
+    if (item.state) li.classList.add(`is-${item.state}`);
 
     const swatch = document.createElement('i');
     swatch.className = `swatch ${item.tone || ''}`;
@@ -393,7 +394,10 @@ function updateCta() {
   } else {
     label = state.origin && state.host ? `清空 ${state.host}` : '当前页面不可清理';
   }
-  $('cta-label').textContent = state.busy ? '正在清空…' : label;
+  $('cta-label').textContent = state.busy
+    ? `清理中 · ${Math.round(progress.value * 100)}%`
+    : label;
+  if (!state.busy) $('cta-fill').style.width = '0%';
 
   const noPage = !state.origin;
   $('btn-clean').disabled =
@@ -503,7 +507,7 @@ async function handleClean() {
 
   // 主按钮只清浏览器本地的数据。
   // 账号里的云端会话是另一件事，只由卡片上那个独立的「删除」按钮触发，并且单独确认——
-  // 一个叫「清足迹」的按钮不该顺手删掉你账号里的东西。
+  // 一个叫「清浏览数据」的按钮不该顺手删掉你账号里的东西。
   const willLogoutAll = scope === SCOPE.ALL && s.items.cookies;
 
   if (willLogoutAll) {
@@ -517,6 +521,8 @@ async function handleClean() {
   }
 
   state.busy = true;
+  // 勾了几项就分几格，圆环按这个分数走。
+  startProgress(ITEM_DEFS.filter((d) => s.items[d.key]).length);
   updateCta();
   $('btn-clean').classList.add('is-busy');
 
@@ -531,14 +537,10 @@ async function handleClean() {
     since: TIME_RANGE_MAP[s.since] ? TIME_RANGE_MAP[s.since].ms : 0,
     items: s.items,
     keepLogin: s.keepLogin,
-    onProgress: (step) => {
-      drainSegment(step);
-      markToggleDone(step);
+    onProgress: (step, index, total) => {
+      advanceProgress(step, index, total);
     },
   });
-
-  state.busy = false;
-  $('btn-clean').classList.remove('is-busy');
 
   // 当前站点：重新探测一次，用前后差值报告真实释放量。
   let freed = null;
@@ -553,7 +555,10 @@ async function handleClean() {
         : '';
   }
 
-  showResult(report, freed);
+  // 等收尾动画走完，按钮再变回可点的样子。
+  await showResult(report, freed);
+  state.busy = false;
+  $('btn-clean').classList.remove('is-busy');
   updateCta();
 
   await pushCleanHistory({
@@ -566,43 +571,159 @@ async function handleClean() {
   await renderFooter();
 }
 
-/** 清掉圆环里属于该步骤的段 */
-function drainSegment(step) {
-  const map = { cache: ['caches'], siteData: ['localStorage', 'indexedDB'] };
-  const keys = map[step];
-  if (!keys) return;
+/* ---------------------------------------------------------------- 进度 */
 
-  document.querySelectorAll('.ring-seg').forEach((circle) => {
-    if (!keys.includes(circle.dataset.key)) return;
-    circle.style.strokeDasharray = `0 ${RING_C}`;
-  });
-  animateCore();
+/**
+ * 清理的时候，圆环从「数据构成」切成「进度盘」：中心走百分比，弧按比例涨，
+ * 按钮里同时有一道填充在推进。
+ *
+ * 百分比按步骤推进：勾了几项就分几格，每一步占一格。
+ * 没真正做完之前最多报 99%，所以它不会谎报已经清完了。
+ */
+const progress = {
+  raf: null,
+  value: 0, // 当前显示的比例
+  target: 0, // 正在追的比例
+  total: 1,
+  last: 0,
+  done: false,
+  runningKey: '',
+};
+
+const EASE_MS = 180; // 追一个目标所用的时间常数
+let progressArc = null;
+
+function startProgress(total) {
+  progress.total = Math.max(1, total);
+  progress.value = 0;
+  progress.target = 0;
+  progress.done = false;
+  progress.last = performance.now();
+  progress.runningKey = '';
+
+  // 非当前范围平时是收起足迹计的，清理时亮出来，进度才有地方显示。
+  $('meter').hidden = false;
+  $('subject-note').hidden = true;
+
+  renderStepLegend();
+  paintProgress();
+  if (!progress.raf) progress.raf = requestAnimationFrame(tickProgress);
 }
 
-let coreAnimation = null;
+function advanceProgress(step, index, total) {
+  progress.total = Math.max(1, total);
+  progress.target = Math.min(1, index / total);
+  // 上一项到这里才算真的做完。
+  if (progress.runningKey) {
+    markStepState(progress.runningKey, 'done');
+    markToggleDone(progress.runningKey);
+  }
+  progress.runningKey = step;
+  markStepState(step, 'running');
+}
 
-function animateCore() {
-  const core = $('core-value');
-  const label = $('core-label');
-  const from = Number(core.textContent);
-  if (!Number.isFinite(from) || from <= 0) return;
+function tickProgress(now) {
+  const dt = Math.min(64, now - progress.last);
+  progress.last = now;
+  const diff = progress.target - progress.value;
+  if (diff > 0) {
+    progress.value += diff * Math.min(1, dt / EASE_MS);
+  }
+  paintProgress();
+  progress.raf = requestAnimationFrame(tickProgress);
+}
 
-  const start = performance.now();
-  if (coreAnimation) cancelAnimationFrame(coreAnimation);
-  const tick = (now) => {
-    const t = Math.min(1, (now - start) / 450);
-    const value = Math.round(from * (1 - t));
-    core.textContent = String(value);
-    if (t < 1) {
-      coreAnimation = requestAnimationFrame(tick);
-    } else {
-      core.textContent = '✓';
-      $('ring-core').classList.add('is-empty');
-      label.textContent = '已清空';
-      coreAnimation = null;
-    }
-  };
-  coreAnimation = requestAnimationFrame(tick);
+function paintProgress() {
+  // 没真正做完之前不报 100%，不然最后一步还在跑却已经满格了。
+  const ratio = progress.done ? progress.value : Math.min(0.99, progress.value);
+  const pct = Math.round(ratio * 100);
+  renderProgressRing(ratio);
+  $('core-value').textContent = `${pct}%`;
+  $('core-label').textContent = '清理中';
+  if (!state.busy) return;
+  $('cta-fill').style.width = `${pct}%`;
+  $('cta-label').textContent = `清理中 · ${pct}%`;
+}
+
+/** 圆环切成进度盘：一条信号色圆弧，从十二点方向顺时针涨 */
+function renderProgressRing(ratio) {
+  const g = $('ring-segments');
+  if (!progressArc || !progressArc.isConnected) {
+    g.textContent = '';
+    progressArc = document.createElementNS(SVG_NS, 'circle');
+    progressArc.setAttribute('cx', '50');
+    progressArc.setAttribute('cy', '50');
+    progressArc.setAttribute('r', String(RING_R));
+    progressArc.setAttribute('class', 'ring-seg');
+    progressArc.setAttribute('stroke', 'var(--signal)');
+    progressArc.style.strokeLinecap = 'round';
+    g.appendChild(progressArc);
+  }
+
+  if (ratio <= 0) {
+    progressArc.style.opacity = '0';
+    return;
+  }
+  progressArc.style.opacity = '1';
+  const len = ratio >= 1 ? RING_C : Math.max(1, ratio * RING_C - RING_GAP);
+  progressArc.style.strokeDasharray = `${len} ${RING_C}`;
+}
+
+/** 清理中的图例：列出这次要清的几项 */
+function renderStepLegend() {
+  const items = ITEM_DEFS.filter((d) => state.settings.items[d.key]).map((d) => ({
+    key: d.key,
+    label: d.label,
+    value: '待清理',
+    state: 'pending',
+  }));
+  if (!items.length) items.push({ key: 'none', label: '没有勾选任何清理项', value: '' });
+  renderLegend(items);
+}
+
+function markStepState(key, status) {
+  const li = document.querySelector(`#legend li[data-key="${key}"]`);
+  if (!li) return;
+  li.classList.remove('is-pending', 'is-running', 'is-done');
+  li.classList.add(`is-${status}`);
+  const value = li.querySelector('.val');
+  if (!value) return;
+  if (status === 'running') value.textContent = '清理中…';
+  else if (status === 'done') value.textContent = '已清除';
+}
+
+function stopProgress() {
+  if (progress.raf) cancelAnimationFrame(progress.raf);
+  progress.raf = null;
+}
+
+/** 收尾：把剩下的那段补满，停一下，再变成 ✓ */
+function finishProgress() {
+  stopProgress();
+  progress.done = true;
+  if (progress.runningKey) markToggleDone(progress.runningKey);
+
+  return new Promise((resolve) => {
+    const from = progress.value;
+    const start = performance.now();
+    const fill = (now) => {
+      const t = Math.min(1, (now - start) / 260);
+      progress.value = from + (1 - from) * t;
+      paintProgress();
+      if (t < 1) {
+        requestAnimationFrame(fill);
+        return;
+      }
+      setTimeout(() => {
+        if (progressArc) progressArc.style.opacity = '0';
+        $('ring-core').classList.add('is-empty');
+        $('core-value').textContent = '✓';
+        $('core-label').textContent = '已清空';
+        resolve();
+      }, 260);
+    };
+    requestAnimationFrame(fill);
+  });
 }
 
 function markToggleDone(step) {
@@ -617,7 +738,7 @@ function showNotice(title, sub) {
   $('site-size').textContent = '';
 }
 
-/** 清理完成后，图例换成逐项结果，圆环中心变成「已清空」 */
+/** 清理完成后，图例换成逐项结果，圆环走满再变成 ✓ */
 function showResult(report, freed) {
   const meter = $('meter');
   const note = $('subject-note');
@@ -633,10 +754,10 @@ function showResult(report, freed) {
         item.status === 'error'
           ? '失败'
           : item.status === 'skipped'
-            ? '已跳过'
+            ? item.note || '已跳过'
             : item.note || '已清除',
-      failed: item.status === 'error',
-      skipped: item.status === 'skipped',
+      state:
+        item.status === 'error' ? 'fail' : item.status === 'skipped' ? 'skip' : 'done',
     }));
 
     if (!rows.length) {
@@ -644,23 +765,21 @@ function showResult(report, freed) {
     }
     renderLegend(rows);
 
-    const core = $('ring-core');
-    core.classList.add('is-empty');
-    $('core-value').textContent = '✓';
-    $('core-label').textContent = '已清空';
-
     const meta = [];
     if (freed) meta.push(`释放 ${formatBytes(freed)}`);
     meta.push(`用时 ${formatDuration(report.durationMs)}`);
     $('site-size').textContent = meta.join(' · ');
-  } else {
-    meter.hidden = true;
-    note.hidden = false;
-    const done = report.items.filter((i) => i.status === 'done').length;
-    note.innerHTML = `<b>${done} 项已清除</b><br>${
-      freed ? `释放 ${formatBytes(freed)} · ` : ''
-    }用时 ${formatDuration(report.durationMs)}`;
+    return finishProgress();
   }
+
+  stopProgress();
+  meter.hidden = true;
+  note.hidden = false;
+  const done = report.items.filter((i) => i.status === 'done').length;
+  note.innerHTML = `<b>${done} 项已清除</b><br>${
+    freed ? `释放 ${formatBytes(freed)} · ` : ''
+  }用时 ${formatDuration(report.durationMs)}`;
+  return Promise.resolve();
 }
 
 /**

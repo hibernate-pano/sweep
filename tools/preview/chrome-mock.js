@@ -50,7 +50,7 @@
 
   window.chrome = {
     runtime: {
-      getManifest: () => ({ version: '1.0.0', name: 'Clean My Webbrowser' }),
+      getManifest: () => ({ version: '1.0.0', name: 'Clear Browsing Data' }),
       openOptionsPage: () => {},
       onMessage: { addListener: () => {} },
       lastError: null,

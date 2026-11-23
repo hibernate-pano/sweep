@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="color-scheme" content="dark light" />
-    <title>Clean My Webbrowser</title>
+    <title>Clear Browsing Data</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -15,7 +15,7 @@
             <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
             <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
           </svg>
-          <span class="wordmark">Clean My Webbrowser</span>
+          <span class="wordmark">Clear Browsing Data</span>
         </div>
         <button id="btn-options" class="icon-btn" type="button" title="设置" aria-label="打开设置">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -73,6 +73,7 @@
             <button type="button" data-scope="custom" role="radio" aria-checked="false">自选</button>
           </div>
           <button class="cta" id="btn-clean" type="button">
+            <span class="cta-fill" id="cta-fill"></span>
             <span class="cta-label" id="cta-label">清空足迹</span>
           </button>
         </section>
