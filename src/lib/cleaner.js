@@ -87,7 +87,7 @@ async function clearAllHistory(since) {
  * @param {string[]} opts.origins   scope 为 current/custom 时的目标来源
  * @param {number} opts.since       毫秒时间戳，0 表示不限时间
  * @param {object} opts.items       { cache, siteData, cookies, history } 开关
- * @param {string[]} opts.keepLogin 保留登录状态的域名（清缓存/存储但不动 Cookie）
+ * @param {string[]} opts.keepLogin 保留登录状态的域名（不动 Cookie 和本地存储，缓存与历史照清）
  * @param {(step:string, index:number, total:number)=>void} opts.onProgress
  */
 export async function runClean({
@@ -144,22 +144,30 @@ export async function runClean({
   try {
     if (scope === 'all') {
       const base = { since, originTypes: WEB_ORIGIN_TYPES };
-      // 保留登录的站点整体排除：清掉 localStorage/IndexedDB 同样会把人踢下线。
+      // 名单里的站只保 Cookie 和本地存储——那才是登录态所在。
+      // 缓存和历史跟登录无关，照清；否则「保留登录」会顺带把缓存也留下。
       const excluded = keepOrigins.length ? { excludeOrigins: keepOrigins } : {};
 
-      if (items.cache) await run('cache', toDataTypeSet(['cache']), { ...base, ...excluded });
+      if (items.cache) await run('cache', toDataTypeSet(['cache']), base);
       if (items.siteData) await run('siteData', toDataTypeSet(['siteData']), { ...base, ...excluded });
       if (items.cookies) await run('cookies', toDataTypeSet(['cookies']), { ...base, ...excluded });
     } else {
-      // 单站点范围下，命中白名单的来源直接跳过，避免清掉别人的登录态。
+      // 命中名单的来源照清缓存，但不动它的 Cookie 和站点数据。
       const targets = origins.filter((origin) => !isKept(origin));
-      report.skipped = origins.filter((o) => isKept(o));
+      report.skipped = origins.filter((origin) => isKept(origin));
 
-      if (targets.length) {
-        const options = { origins: targets, since };
-        if (items.cache) await run('cache', toDataTypeSet(['cache']), options);
-        if (items.siteData) await run('siteData', toDataTypeSet(['siteData']), options);
-        if (items.cookies) await run('cookies', toDataTypeSet(['cookies']), options);
+      if (origins.length) {
+        const every = { origins, since };
+        const unprotected = { origins: targets, since };
+        if (items.cache) await run('cache', toDataTypeSet(['cache']), every);
+        if (items.siteData) {
+          if (targets.length) await run('siteData', toDataTypeSet(['siteData']), unprotected);
+          else report.items.push(resultRow('siteData', 'skipped', '已保留'));
+        }
+        if (items.cookies) {
+          if (targets.length) await run('cookies', toDataTypeSet(['cookies']), unprotected);
+          else report.items.push(resultRow('cookies', 'skipped', '已保留'));
+        }
       }
     }
 
@@ -167,7 +175,8 @@ export async function runClean({
       index += 1;
       onProgress('history', index, total);
       try {
-        const historyTargets = scope === 'all' ? null : origins.filter((origin) => !isKept(origin));
+        // 历史跟登录无关，名单里的站也照清——和「全部网站」范围保持同一个口径。
+        const historyTargets = scope === 'all' ? null : origins;
 
         if (historyTargets && historyTargets.length === 0) {
           report.items.push(resultRow('history', 'skipped', '已跳过'));

@@ -36,6 +36,7 @@ async function init() {
   renderItems();
   renderSince();
   renderCustom();
+  await renderRecent();
   renderKeep();
   renderAuto();
   await renderHistory();
@@ -138,7 +139,60 @@ function renderCustom() {
         customOrigins: settings.customOrigins.filter((o) => o !== origin),
       });
       renderCustom();
+      renderRecent();
     }));
+  }
+}
+
+/**
+ * 最近 7 天去过的站，按主域名去重后给一个快捷入口。
+ * 名单是配置，配置会烂——让用户点一下就能加，比教他手打域名省事。
+ */
+async function renderRecent() {
+  const row = $('recent-row');
+  const box = $('recent-chips');
+  box.textContent = '';
+
+  const existing = new Set(settings.customOrigins);
+  const usable = (await recentOrigins()).filter((o) => !existing.has(o)).slice(0, 8);
+  row.hidden = !usable.length;
+  if (!usable.length) return;
+
+  for (const origin of usable) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip';
+    btn.textContent = hostOf(origin);
+    btn.title = '加入自选站点';
+    btn.addEventListener('click', async () => {
+      settings = await setSettings({
+        customOrigins: [...settings.customOrigins, origin],
+      });
+      renderCustom();
+      renderRecent();
+    });
+    box.appendChild(btn);
+  }
+}
+
+async function recentOrigins() {
+  try {
+    const hits = await chrome.history.search({
+      text: '',
+      startTime: Date.now() - 7 * 24 * 60 * 60 * 1000,
+      maxResults: 300,
+    });
+    const seen = new Map();
+    for (const hit of hits) {
+      const host = hostOf(hit.url || '');
+      if (!host) continue;
+      const domain = registrableDomain(host);
+      if (!domain || seen.has(domain)) continue;
+      seen.set(domain, `https://${domain}`);
+    }
+    return [...seen.values()];
+  } catch {
+    return [];
   }
 }
 
@@ -232,6 +286,7 @@ $('custom-form').addEventListener('submit', async (event) => {
   if (!settings.customOrigins.includes(origin)) {
     settings = await setSettings({ customOrigins: [...settings.customOrigins, origin] });
     renderCustom();
+    renderRecent();
   }
   input.value = '';
 });

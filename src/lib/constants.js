@@ -24,7 +24,7 @@ export const ITEM_DEFS = [
   {
     key: 'siteData',
     label: '站点数据',
-    hint: 'LocalStorage、IndexedDB、Service Worker（聊天记录多存在这里）',
+    hint: 'LocalStorage、IndexedDB、Service Worker（本地会话、偏好设置）',
     types: ['localStorage', 'indexedDB', 'fileSystems', 'serviceWorkers'],
   },
   {

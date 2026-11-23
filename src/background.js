@@ -29,7 +29,7 @@ async function autoClean(reason, settings) {
   // 自动清理没有「当前标签页」这个概念。绝不能把 current 静默降级成 all，
   // 那会让开着自动清理的人被悄悄清空整个浏览器。current 一律跳过。
   if (settings.scope === SCOPE.CURRENT) {
-    console.info('[清足迹] 默认范围是「当前网站」，自动清理跳过（没有当前页概念）');
+    console.info('[Clean My Webbrowser] 默认范围是「当前网站」，自动清理跳过（没有当前页概念）');
     return null;
   }
 

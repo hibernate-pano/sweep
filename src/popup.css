@@ -130,7 +130,7 @@ body {
 .wordmark {
   font-size: 12.5px;
   font-weight: 620;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.015em;
 }
 
 .icon-btn {
@@ -575,6 +575,16 @@ body {
 
 .toggle.is-done[aria-pressed='true']::before {
   background: var(--rule-2);
+}
+
+/* 保留名单里的站点：这两项会被保住 */
+.toggle[data-kept='1']::after {
+  content: '保留';
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
 }
 
 /* ---------- 时间范围 ---------- */

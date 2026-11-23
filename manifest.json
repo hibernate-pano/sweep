@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "清足迹 Clean My Footprints",
+  "name": "Clean My Webbrowser",
   "version": "1.0.0",
-  "description": "一键清除浏览足迹：缓存、站点数据、Cookie、历史记录，并清理聊天应用里的会话记录。",
+  "description": "一键清除浏览足迹：缓存、站点数据、Cookie、历史记录。",
   "minimum_chrome_version": "116",
   "permissions": [
     "browsingData",
@@ -21,7 +21,7 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "清足迹 — 一键清理浏览足迹",
+    "default_title": "Clean My Webbrowser — 一键清理浏览足迹",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -45,7 +45,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "打开清足迹面板"
+      "description": "打开 Clean My Webbrowser 面板"
     }
   }
 }

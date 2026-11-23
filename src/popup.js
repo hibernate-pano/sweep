@@ -73,6 +73,8 @@ async function loadTab() {
   state.tab = tab || null;
   state.origin = originOf(tab && tab.url);
   state.host = hostOf(tab && tab.url);
+  // 站点变了，「保留名单」标记要跟着重画。
+  renderToggles();
 
   if (!state.origin) {
     $('site-host').textContent = '当前页面不可清理';
@@ -259,6 +261,8 @@ function renderScope() {
 function renderToggles() {
   const box = $('chips');
   box.textContent = '';
+  // 当前站点在保留名单里时，这两项会被保住，标出来，免得以为没生效。
+  const kept = state.settings.scope === SCOPE.CURRENT && currentIsKept();
   for (const def of ITEM_DEFS) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -266,6 +270,7 @@ function renderToggles() {
     btn.textContent = def.label;
     btn.title = def.hint;
     btn.dataset.key = def.key;
+    if (kept && (def.key === 'siteData' || def.key === 'cookies')) btn.dataset.kept = '1';
     btn.setAttribute('aria-pressed', String(Boolean(state.settings.items[def.key])));
     btn.addEventListener('click', async () => {
       const items = { ...state.settings.items };
@@ -418,6 +423,7 @@ $('scope').addEventListener('click', async (event) => {
   state.settings = await setSettings({ scope: btn.dataset.scope });
   renderScope();
   renderCustom();
+  renderToggles();
   renderSubject();
   updateCta();
 });
@@ -492,35 +498,22 @@ async function handleClean() {
     return;
   }
 
-  if (scope === SCOPE.CURRENT && currentIsKept()) {
-    showNotice(`${state.host} 在保留名单里`, '到设置里移除它，或换一个范围');
-    return;
-  }
+  // 当前站点在「保留登录状态」名单里不是错误：缓存和历史照清，
+  // 只有 Cookie 和站点数据会被保住，所以不在这里拦下。
 
-  // 云端会话只在「当前站点确实在清理范围内」时才提示删除。
-  const originInScope =
-    scope === SCOPE.CURRENT || (scope === SCOPE.CUSTOM && origins.includes(state.origin));
-  const cloudCount = originInScope && state.chatSite && state.cloud ? state.cloud.total : 0;
-
-  // 所有不可逆的部分合成一次确认，分开弹两个框只会让人盲目连点。
+  // 主按钮只清浏览器本地的数据。
+  // 账号里的云端会话是另一件事，只由卡片上那个独立的「删除」按钮触发，并且单独确认——
+  // 一个叫「清足迹」的按钮不该顺手删掉你账号里的东西。
   const willLogoutAll = scope === SCOPE.ALL && s.items.cookies;
 
-  if (willLogoutAll || cloudCount > 0) {
-    const risks = [];
-    if (willLogoutAll) risks.push('把你从几乎所有网站登出，包括正在使用的工作账号');
-    if (cloudCount > 0) {
-      risks.push(`永久删除 ${state.chatSite.label} 账号里的 ${cloudCount} 条会话`);
-    }
-    const both = risks.length > 1;
-
+  if (willLogoutAll) {
+    const reach = s.keepLogin.length ? '大多数网站（保留名单里的除外）' : '几乎所有网站';
     const confirmed = await confirmDialog({
-      title: both ? '确认执行两项不可恢复的操作？' : '确认清理？',
-      body: `这次清理会${risks.join('，并且会')}，${both ? '两者都无法撤销。' : '无法撤销。'}`,
+      title: '确认清理？',
+      body: `这次清理会把你从${reach}登出，包括正在使用的工作账号，无法撤销。`,
       okText: '确认清理',
     });
     if (!confirmed) return;
-
-    if (cloudCount > 0) await applyCloudDelete(cloudCount);
   }
 
   state.busy = true;
