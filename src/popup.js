@@ -165,8 +165,11 @@ function renderSubject() {
     note.hidden = false;
     note.innerHTML = scopeSummary();
     $('site-size').textContent = '';
+    // 范围不是当前网站时，站点名字没有意义，留着只会让人误会这一下是冲着它来的。
+    $('subject-line').hidden = true;
     return;
   }
+  $('subject-line').hidden = false;
 
   meter.hidden = false;
   note.hidden = true;
@@ -438,7 +441,7 @@ $('btn-options').addEventListener('click', () => {
 
 $('btn-reset').addEventListener('click', async () => {
   state.settings = await setSettings({
-    scope: SCOPE.CURRENT,
+    scope: SCOPE.ALL,
     items: { cache: true, siteData: true, cookies: false, history: true },
     since: 'all',
   });
@@ -508,16 +511,31 @@ async function handleClean() {
   // 主按钮只清浏览器本地的数据。
   // 账号里的云端会话是另一件事，只由卡片上那个独立的「删除」按钮触发，并且单独确认——
   // 一个叫「清浏览数据」的按钮不该顺手删掉你账号里的东西。
-  const willLogoutAll = scope === SCOPE.ALL && s.items.cookies;
 
-  if (willLogoutAll) {
-    const reach = s.keepLogin.length ? '大多数网站（保留名单里的除外）' : '几乎所有网站';
-    const confirmed = await confirmDialog({
-      title: '确认清理？',
-      body: `这次清理会把你从${reach}登出，包括正在使用的工作账号，无法撤销。`,
-      okText: '确认清理',
-    });
-    if (!confirmed) return;
+  // 全部网站是不可逆的：历史删了就是删了。清之前问一句，跟 Chrome 自己一个做法。
+  if (scope === SCOPE.ALL) {
+    const risks = [];
+    if (s.items.history) {
+      const range = TIME_RANGE_MAP[s.since];
+      risks.push(
+        range && range.ms
+          ? `永久删除最近 ${range.label} 以内的浏览历史`
+          : '永久删除全部浏览历史',
+      );
+    }
+    if (s.items.cookies) {
+      const reach = s.keepLogin.length ? '大多数网站（保留名单里的除外）' : '几乎所有网站';
+      risks.push(`把你从${reach}登出，包括正在使用的工作账号`);
+    }
+
+    if (risks.length) {
+      const confirmed = await confirmDialog({
+        title: '确认清理？',
+        body: `这次清理会${risks.join('，并且会')}，无法撤销。`,
+        okText: '确认清理',
+      });
+      if (!confirmed) return;
+    }
   }
 
   state.busy = true;
@@ -586,11 +604,13 @@ const progress = {
   target: 0, // 正在追的比例
   total: 1,
   last: 0,
+  startedAt: 0,
   done: false,
   runningKey: '',
 };
 
 const EASE_MS = 180; // 追一个目标所用的时间常数
+const MIN_SWEEP_MS = 600; // 清理再快，这一圈也得让人看见走完
 let progressArc = null;
 
 function startProgress(total) {
@@ -598,7 +618,8 @@ function startProgress(total) {
   progress.value = 0;
   progress.target = 0;
   progress.done = false;
-  progress.last = performance.now();
+  progress.startedAt = performance.now();
+  progress.last = progress.startedAt;
   progress.runningKey = '';
 
   // 非当前范围平时是收起足迹计的，清理时亮出来，进度才有地方显示。
@@ -699,30 +720,39 @@ function stopProgress() {
 
 /** 收尾：把剩下的那段补满，停一下，再变成 ✓ */
 function finishProgress() {
-  stopProgress();
-  progress.done = true;
   if (progress.runningKey) markToggleDone(progress.runningKey);
 
+  // 数据其实早就删完了，但圈得让人看见走完这一圈——
+  // 真实清理往往只要一百多毫秒，不撑一下这一圈根本看不见。
+  // 这段时间里进度条继续跑，只是不会报 100%。
+  const elapsed = performance.now() - progress.startedAt;
+  const wait = Math.max(0, MIN_SWEEP_MS - elapsed);
+
   return new Promise((resolve) => {
-    const from = progress.value;
-    const start = performance.now();
-    const fill = (now) => {
-      const t = Math.min(1, (now - start) / 260);
-      progress.value = from + (1 - from) * t;
-      paintProgress();
-      if (t < 1) {
-        requestAnimationFrame(fill);
-        return;
-      }
-      setTimeout(() => {
-        if (progressArc) progressArc.style.opacity = '0';
-        $('ring-core').classList.add('is-empty');
-        $('core-value').textContent = '✓';
-        $('core-label').textContent = '已清空';
-        resolve();
-      }, 260);
-    };
-    requestAnimationFrame(fill);
+    setTimeout(() => {
+      stopProgress();
+      progress.done = true;
+
+      const from = progress.value;
+      const start = performance.now();
+      const fill = (now) => {
+        const t = Math.min(1, (now - start) / 260);
+        progress.value = from + (1 - from) * t;
+        paintProgress();
+        if (t < 1) {
+          requestAnimationFrame(fill);
+          return;
+        }
+        setTimeout(() => {
+          if (progressArc) progressArc.style.opacity = '0';
+          $('ring-core').classList.add('is-empty');
+          $('core-value').textContent = '✓';
+          $('core-label').textContent = '已清空';
+          resolve();
+        }, 260);
+      };
+      requestAnimationFrame(fill);
+    }, wait);
   });
 }
 
@@ -742,8 +772,9 @@ function showNotice(title, sub) {
 function showResult(report, freed) {
   const meter = $('meter');
   const note = $('subject-note');
+  const current = state.settings.scope === SCOPE.CURRENT;
 
-  if (state.settings.scope === SCOPE.CURRENT) {
+  if (current) {
     meter.hidden = false;
     note.hidden = true;
 
@@ -769,17 +800,18 @@ function showResult(report, freed) {
     if (freed) meta.push(`释放 ${formatBytes(freed)}`);
     meta.push(`用时 ${formatDuration(report.durationMs)}`);
     $('site-size').textContent = meta.join(' · ');
-    return finishProgress();
   }
 
-  stopProgress();
-  meter.hidden = true;
-  note.hidden = false;
-  const done = report.items.filter((i) => i.status === 'done').length;
-  note.innerHTML = `<b>${done} 项已清除</b><br>${
-    freed ? `释放 ${formatBytes(freed)} · ` : ''
-  }用时 ${formatDuration(report.durationMs)}`;
-  return Promise.resolve();
+  // 圆环走完这一圈，再决定面板接下来显示什么。
+  return finishProgress().then(() => {
+    if (current) return;
+    meter.hidden = true;
+    note.hidden = false;
+    const done = report.items.filter((i) => i.status === 'done').length;
+    note.innerHTML = `<b>${done} 项已清除</b><br>${
+      freed ? `释放 ${formatBytes(freed)} · ` : ''
+    }用时 ${formatDuration(report.durationMs)}`;
+  });
 }
 
 /**

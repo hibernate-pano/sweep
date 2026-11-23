@@ -67,6 +67,14 @@ function renderTheme() {
 
 function renderScope() {
   markActive($('scope-seg'), 'scope', settings.scope);
+
+  // 自动清理跟着默认范围走，得说清楚两种范围分别会发生什么。
+  const hint = $('auto-hint');
+  if (!hint) return;
+  hint.textContent =
+    settings.scope === SCOPE.CURRENT
+      ? '按上面的默认范围执行一次。默认范围是「当前网站」时，后台没有「当前标签页」的概念，会直接跳过。'
+      : '按上面的默认范围执行一次。默认范围是「全部网站」时，每次触发都会清掉所有网站的浏览历史。';
 }
 
 /* 事件只绑定一次，渲染函数只负责更新选中态，避免重复绑定。 */

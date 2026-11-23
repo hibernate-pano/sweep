@@ -54,7 +54,7 @@ export const TIME_RANGE_MAP = Object.fromEntries(TIME_RANGES.map((r) => [r.id, r
 
 export const DEFAULT_SETTINGS = {
   theme: 'system', // system | dark | light
-  scope: SCOPE.CURRENT,
+  scope: SCOPE.ALL,
   items: { cache: true, siteData: true, cookies: false, history: true },
   since: 'all',
   customOrigins: [],

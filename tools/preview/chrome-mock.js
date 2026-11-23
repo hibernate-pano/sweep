@@ -6,7 +6,7 @@
   const DEFAULTS = {
     settings: {
       theme: 'dark',
-      scope: 'current',
+      scope: 'all',
       items: { cache: true, siteData: true, cookies: false, history: true },
       since: 'all',
       customOrigins: ['https://news.ycombinator.com'],
