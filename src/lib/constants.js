@@ -18,25 +18,26 @@ export const ITEM_DEFS = [
   {
     key: 'cache',
     label: '缓存',
-    hint: '磁盘缓存、Cache Storage',
+    hint: '磁盘缓存、Cache Storage 离线缓存包。清了只是让网页重新下载一次，不影响登录。',
     types: ['cache', 'cacheStorage'],
   },
   {
     key: 'siteData',
     label: '站点数据',
-    hint: 'LocalStorage、IndexedDB、Service Worker（本地会话、偏好设置）',
+    hint:
+      'LocalStorage、IndexedDB、Service Worker、文件系统。很多站把登录令牌也存在这里，清了照样会退出登录。',
     types: ['localStorage', 'indexedDB', 'fileSystems', 'serviceWorkers'],
   },
   {
     key: 'cookies',
     label: 'Cookie',
-    hint: '会退出该网站的登录状态',
+    hint: 'Cookie 和自动填充保存的表单数据。清了会退出这些网站的登录。',
     types: ['cookies', 'formData'],
   },
   {
     key: 'history',
     label: '历史记录',
-    hint: '浏览历史',
+    hint: '浏览历史。地址栏里输入过的网址也在里面。',
     types: [],
   },
 ];
