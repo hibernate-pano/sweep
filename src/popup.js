@@ -290,9 +290,10 @@ function scopeSummary() {
   if (s.items.siteData) bits.push('站点数据');
 
   const head = `${target}的${bits.join('、') || '数据'}将被清除。`;
-  return `${head}${
-    s.items.cookies ? '包含 Cookie，会退出这些网站的登录。' : '不含 Cookie，登录状态保留。'
-  }`;
+  const cookieLine = s.items.cookies
+    ? `包含 Cookie，会退出这些网站的登录${s.keepLogin.length ? '（保留名单里的除外）' : ''}。`
+    : '不含 Cookie，登录状态保留。';
+  return `${head}${cookieLine}`;
 }
 
 function renderRing(segments, center) {
@@ -390,9 +391,10 @@ function renderToggles() {
     btn.type = 'button';
     btn.className = 'toggle';
     btn.textContent = def.label;
-    btn.title = def.hint;
+    const isKept = kept && (def.key === 'siteData' || def.key === 'cookies');
+    btn.title = isKept ? '在保留登录名单里，这次不会被清除' : def.hint;
     btn.dataset.key = def.key;
-    if (kept && (def.key === 'siteData' || def.key === 'cookies')) btn.dataset.kept = '1';
+    if (isKept) btn.dataset.kept = '1';
     btn.setAttribute('aria-pressed', String(Boolean(state.settings.items[def.key])));
     btn.addEventListener('click', async () => {
       const items = { ...state.settings.items };
@@ -405,6 +407,14 @@ function renderToggles() {
     });
     box.appendChild(btn);
   }
+  renderKeepNote(kept);
+}
+
+/** 说清楚哪两项被保住了——方格太小，塞不下「保留」两个字 */
+function renderKeepNote(kept) {
+  const note = $('keep-note');
+  note.hidden = !kept;
+  if (kept) note.textContent = '本站在保留登录名单里：Cookie 和站点数据不会被清除。';
 }
 
 function renderWindow() {
@@ -634,31 +644,8 @@ async function handleClean() {
   // 账号里的云端会话是另一件事，只由卡片上那个独立的「删除」按钮触发，并且单独确认——
   // 一个叫「清浏览数据」的按钮不该顺手删掉你账号里的东西。
 
-  // 全部网站是不可逆的：历史删了就是删了。清之前问一句，跟 Chrome 自己一个做法。
-  if (scope === SCOPE.ALL) {
-    const risks = [];
-    if (s.items.history) {
-      const range = TIME_RANGE_MAP[s.since];
-      risks.push(
-        range && range.ms
-          ? `永久删除最近 ${range.label}以内的浏览历史`
-          : '永久删除全部浏览历史',
-      );
-    }
-    if (s.items.cookies) {
-      const reach = s.keepLogin.length ? '大多数网站（保留名单里的除外）' : '几乎所有网站';
-      risks.push(`把你从${reach}登出，包括正在使用的工作账号`);
-    }
-
-    if (risks.length) {
-      const confirmed = await confirmDialog({
-        title: '确认清理？',
-        body: `这次清理会${risks.join('，并且会')}，无法撤销。`,
-        okText: '确认清理',
-      });
-      if (!confirmed) return;
-    }
-  }
+  // 这里不再二次确认：这个扩展存在的意义就是「一下就清掉」，
+  // 每次都弹窗等于把它变成 Chrome 自己的设置页。想控制范围，用上面的范围和时间范围。
 
   state.busy = true;
   // 勾了几项就分几格，圆环按这个分数走。

@@ -597,35 +597,42 @@ body {
   border-top: 1px solid var(--rule);
 }
 
+/* 四个开关排成一行等宽的格子：比「三个 + 落单一个」的折行整齐，
+   也比四颗散落的药丸更像一个控件。 */
 .toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
 }
 
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px 5px 9px;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 4px;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--ink-3);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 540;
+  white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
   transition: border-color 0.14s var(--ease), color 0.14s var(--ease), background 0.14s var(--ease);
 }
 
 .toggle::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  flex: none;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: transparent;
-  box-shadow: inset 0 0 0 1.4px var(--rule-2);
+  box-shadow: inset 0 0 0 1.3px var(--rule-2);
   transition: background 0.14s var(--ease), box-shadow 0.14s var(--ease);
 }
 
@@ -655,13 +662,16 @@ body {
   background: var(--rule-2);
 }
 
-/* 保留名单里的站点：这两项会被保住 */
-.toggle[data-kept='1']::after {
-  content: '保留';
-  margin-left: 2px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+/* 保留名单里的站点：这两项这次不会被清。 */
+.toggle[data-kept='1'] {
+  border-style: dashed;
+}
+
+/* 说明白哪两项被保住了 */
+.keep-note {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
   color: var(--ink-3);
 }
 
