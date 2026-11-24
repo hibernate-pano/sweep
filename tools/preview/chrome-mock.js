@@ -39,6 +39,60 @@
   let usage = 4_812_000;
   let cloudTotal = 34;
 
+  // 假的历史：14 个站、一百多条记录，摊在最近 30 天里。
+  // 这样「全部网站」的圆盘才有真实的形状可看。
+  const MOCK_SITES = [
+    ['github.com', '/repos', 26],
+    ['news.ycombinator.com', '/item', 18],
+    ['developer.mozilla.org', '/en-US/docs', 14],
+    ['chatgpt.com', '/c', 12],
+    ['mail.google.com', '/mail/u/0', 10],
+    ['stackoverflow.com', '/questions', 9],
+    ['youtube.com', '/watch', 8],
+    ['zhihu.com', '/question', 7],
+    ['bilibili.com', '/video', 6],
+    ['twitter.com', '/home', 5],
+    ['developer.chrome.com', '/docs', 5],
+    ['figma.com', '/file', 4],
+    ['notion.so', '/page', 4],
+    ['news.ycombinator.com', '/newest', 3],
+  ];
+
+  const mockHistory = [];
+  {
+    let id = 0;
+    for (const [host, path, n] of MOCK_SITES) {
+      for (let k = 0; k < n; k += 1) {
+        id += 1;
+        mockHistory.push({
+          id: String(id),
+          url: `https://${host}${path}/${k + 1}`,
+          title: `${host} 的第 ${k + 1} 页`,
+          visitCount: 1 + ((id * 7) % 23),
+          lastVisitTime: Date.now() - Math.round((id / 141) * 30 * 86400_000),
+        });
+      }
+    }
+    mockHistory.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
+  }
+
+  // 假的 Cookie：24 条，摊在 9 个域上。
+  const mockCookies = [];
+  {
+    const domains = [
+      '.github.com', '.github.com', 'github.com',
+      '.mail.google.com', 'mail.google.com', '.google.com',
+      '.chatgpt.com', '.openai.com',
+      '.zhihu.com', '.bilibili.com', '.figma.com', '.notion.so',
+      '.stackoverflow.com', '.youtube.com', '.developer.mozilla.org',
+    ];
+    domains.forEach((domain, i) => {
+      mockCookies.push({ domain, name: `c${i}`, path: '/', secure: true, httpOnly: true });
+    });
+  }
+
+  const stripDot = (d) => String(d || '').replace(/^\./, '').toLowerCase();
+
   const probe = () => ({
     usage,
     quota: 306_000_000,
@@ -111,7 +165,26 @@
       },
     },
     cookies: {
-      getAll: async () => new Array(12).fill({ name: 'x' }),
+      getAll: async (query = {}) => {
+        let items = mockCookies.slice();
+        try {
+          if (query.url) {
+            const host = new URL(query.url).hostname;
+            items = items.filter((c) => {
+              const cd = stripDot(c.domain);
+              return cd === host || host.endsWith(`.${cd}`);
+            });
+          }
+          if (query.domain) {
+            const cd = stripDot(query.domain);
+            items = items.filter((c) => {
+              const d = stripDot(c.domain);
+              return d === cd || d.endsWith(`.${cd}`);
+            });
+          }
+        } catch {}
+        return items;
+      },
     },
     browsingData: {
       remove: async () => {
@@ -120,9 +193,31 @@
       },
     },
     history: {
-      search: async () => new Array(37).fill({ url: 'https://chatgpt.com/c/x', title: 'ChatGPT' }),
-      deleteUrl: async () => {},
-      deleteRange: async () => {},
+      search: async (query = {}) => {
+        let items = mockHistory.slice();
+        if (query.startTime) items = items.filter((i) => i.lastVisitTime >= query.startTime);
+        if (query.endTime) items = items.filter((i) => i.lastVisitTime < query.endTime);
+        if (query.text) {
+          const t = String(query.text).toLowerCase();
+          items = items.filter(
+            (i) => i.url.toLowerCase().includes(t) || i.title.toLowerCase().includes(t),
+          );
+        }
+        const max = query.maxResults && query.maxResults > 0 ? query.maxResults : 100;
+        return items.slice(0, max);
+      },
+      deleteUrl: async ({ url }) => {
+        const i = mockHistory.findIndex((h) => h.url === url);
+        if (i >= 0) mockHistory.splice(i, 1);
+      },
+      deleteRange: async ({ startTime, endTime }) => {
+        const from = startTime || 0;
+        const to = endTime || Date.now();
+        for (let i = mockHistory.length - 1; i >= 0; i -= 1) {
+          const t = mockHistory[i].lastVisitTime;
+          if (t >= from && t <= to) mockHistory.splice(i, 1);
+        }
+      },
     },
     commands: {
       getAll: async () => [{ name: '_execute_action', shortcut: 'Ctrl+Shift+K' }],

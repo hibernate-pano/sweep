@@ -335,6 +335,31 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* 没勾选的清理项：数据还在，但这次不清——标出来，别让人误读 */
+.legend li[data-off='1'] {
+  color: var(--ink-3);
+}
+
+.legend li[data-off='1'] .swatch {
+  background: var(--rule-2);
+}
+
+.legend li[data-off='1'] .val {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.legend .tag {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--sheet-2);
+  color: var(--ink-3);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
 .legend li.is-done {
   color: var(--ink-3);
 }

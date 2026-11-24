@@ -1,10 +1,13 @@
 import { ITEM_DEFS, SCOPE, TIME_RANGES, TIME_RANGE_MAP } from './lib/constants.js';
 import { getCleanHistory, getSettings, pushCleanHistory, setSettings } from './lib/settings.js';
 import { countCookies, runClean } from './lib/cleaner.js';
+import { measureFootprint } from './lib/footprint.js';
 import { deleteCloud, matchChatSite, probeCloud } from './lib/chat.js';
 import { probePage } from './lib/pageScripts.js';
 import {
   formatBytes,
+  formatCompact,
+  formatCount,
   formatDuration,
   formatWhen,
   hostOf,
@@ -30,6 +33,9 @@ const state = {
   cloud: null,
   busy: false,
   segments: [],
+  footprint: null,
+  footprintLoading: false,
+  footprintToken: 0,
 };
 
 /* ---------------------------------------------------------------- 主题 */
@@ -65,6 +71,8 @@ async function init() {
   updateCta();
 
   await loadTab();
+  // 范围不是「当前网站」时，圆盘改成整个浏览器的足迹统计。异步去数，不挡面板打开。
+  refreshFootprint().catch(() => {});
   await renderFooter();
 }
 
@@ -155,22 +163,77 @@ function segmentData() {
   ];
 }
 
+/**
+ * 整个浏览器的足迹构成。
+ *
+ * 全部网站/自选范围拿不到「缓存占了多少字节」——扩展没有这个接口。
+ * 能数清楚的就数清楚：历史条数、Cookie 条数、涉及多少个网站。
+ */
+function footprintSegments() {
+  const fp = state.footprint;
+  if (!fp) return [];
+  const items = state.settings.items;
+  const plus = (capped) => (capped ? '+' : '');
+
+  return [
+    {
+      key: 'history',
+      label: '浏览历史',
+      count: fp.history.count,
+      tone: 's1',
+      value: `${formatCount(fp.history.count)}${plus(fp.history.capped)} 条`,
+      off: !items.history,
+    },
+    {
+      key: 'cookies',
+      label: 'Cookie',
+      count: fp.cookies.count,
+      tone: 's2',
+      value: `${formatCount(fp.cookies.count)} 条`,
+      off: !items.cookies,
+    },
+    {
+      key: 'sites',
+      label: state.settings.scope === SCOPE.ALL ? '访问过的网站' : '选中的网站',
+      count: fp.sites.count,
+      tone: 's3',
+      value: `${formatCount(fp.sites.count)}${plus(fp.sites.capped)} 个`,
+      off: false,
+    },
+  ];
+}
+
 function renderSubject() {
   const scope = state.settings.scope;
   const meter = $('meter');
   const note = $('subject-note');
 
   if (scope !== SCOPE.CURRENT) {
-    meter.hidden = true;
+    $('subject-line').hidden = true;
+    meter.hidden = false;
     note.hidden = false;
     note.innerHTML = scopeSummary();
-    $('site-size').textContent = '';
-    // 范围不是当前网站时，站点名字没有意义，留着只会让人误会这一下是冲着它来的。
-    $('subject-line').hidden = true;
+
+    if (!state.footprint) {
+      // 还在数：先占个位，别让圆盘空着。
+      renderRing([], { value: '…', label: '统计中', empty: true });
+      renderLegend([{ key: 'none', label: '正在统计浏览足迹', value: '' }]);
+      return;
+    }
+
+    const segs = footprintSegments();
+    renderRing(segs, { value: formatCompact(state.footprint.total), label: '项足迹' });
+    renderLegend(
+      segs.map((s) => ({
+        ...s,
+        // 没勾的清理项：数据还在，但这次不清。标出来，别让人误读。
+        tag: s.off ? '未清理' : '',
+      })),
+    );
     return;
   }
-  $('subject-line').hidden = false;
 
+  $('subject-line').hidden = false;
   meter.hidden = false;
   note.hidden = true;
 
@@ -182,36 +245,63 @@ function renderSubject() {
   renderLegend(state.segments);
 }
 
+/** 异步统计整个浏览器的足迹。范围、时间范围变了都要重新数。 */
+async function refreshFootprint() {
+  const token = (state.footprintToken += 1);
+  const s = state.settings;
+
+  if (s.scope === SCOPE.CURRENT) {
+    state.footprint = null;
+    renderSubject();
+    return;
+  }
+
+  state.footprint = null;
+  renderSubject();
+
+  const fp = await measureFootprint({
+    scope: s.scope,
+    origins: s.customOrigins,
+    since: TIME_RANGE_MAP[s.since] ? TIME_RANGE_MAP[s.since].ms : 0,
+    keepLogin: s.keepLogin,
+  });
+
+  // 期间用户又切了范围或改了时间，这批数就作废了。
+  if (token !== state.footprintToken) return;
+
+  state.footprint = fp;
+  renderSubject();
+}
+
 function scopeSummary() {
   const s = state.settings;
-  const on = ITEM_DEFS.filter((d) => s.items[d.key]).map((d) => d.label);
+  const on = ITEM_DEFS.filter((d) => s.items[d.key]);
   if (!on.length) return '没有勾选任何清理项。';
 
   const target =
-    s.scope === SCOPE.ALL
-      ? '<b>所有网站</b>'
-      : `<b>${s.customOrigins.length} 个自选站点</b>`;
-  return `${target}的${on.join('、')}将被清除。${
+    s.scope === SCOPE.ALL ? '<b>所有网站</b>' : `<b>${s.customOrigins.length} 个自选站点</b>`;
+
+  const bits = [];
+  if (s.items.history) {
+    const range = TIME_RANGE_MAP[s.since];
+    bits.push(range && range.ms ? `最近 ${range.label}以内的历史记录` : '全部历史记录');
+  }
+  if (s.items.cache) bits.push('缓存');
+  if (s.items.siteData) bits.push('站点数据');
+
+  const head = `${target}的${bits.join('、') || '数据'}将被清除。`;
+  return `${head}${
     s.items.cookies ? '包含 Cookie，会退出这些网站的登录。' : '不含 Cookie，登录状态保留。'
   }`;
 }
 
-function renderRing(segments) {
+function renderRing(segments, center) {
   const g = $('ring-segments');
   g.textContent = '';
 
   const total = segments.reduce((sum, s) => sum + s.count, 0);
   const core = $('ring-core');
-  core.classList.toggle('is-empty', total === 0);
-
-  if (total === 0) {
-    $('core-value').textContent = '—';
-    $('core-label').textContent = '没有本地数据';
-    return;
-  }
-
-  $('core-value').textContent = String(total);
-  $('core-label').textContent = '项数据';
+  core.classList.toggle('is-empty', total === 0 && !center);
 
   let acc = 0;
   for (const seg of segments) {
@@ -227,9 +317,28 @@ function renderRing(segments) {
     circle.style.strokeDasharray = `${len} ${RING_C}`;
     circle.style.strokeDashoffset = String(-(acc * RING_C));
     circle.dataset.key = seg.key;
+    // 没勾的清理项：数据还在，但这次不清。环上也压暗，跟图例保持一致。
+    if (seg.off) circle.style.opacity = '0.4';
     g.appendChild(circle);
     acc += frac;
   }
+
+  // 中心可以另给——统计中、进度百分比、「已清空」都走这条路。
+  if (center) {
+    $('core-value').textContent = center.value;
+    $('core-label').textContent = center.label;
+    if (center.empty) core.classList.add('is-empty');
+    return;
+  }
+
+  if (total === 0) {
+    $('core-value').textContent = '—';
+    $('core-label').textContent = '没有本地数据';
+    return;
+  }
+
+  $('core-value').textContent = String(total);
+  $('core-label').textContent = '项数据';
 }
 
 function renderLegend(items) {
@@ -239,6 +348,7 @@ function renderLegend(items) {
     const li = document.createElement('li');
     li.dataset.key = item.key;
     if (item.state) li.classList.add(`is-${item.state}`);
+    if (item.off) li.dataset.off = '1';
 
     const swatch = document.createElement('i');
     swatch.className = `swatch ${item.tone || ''}`;
@@ -252,6 +362,14 @@ function renderLegend(items) {
     value.textContent = item.value ?? String(item.count);
 
     li.append(swatch, label, value);
+
+    if (item.tag) {
+      const tag = document.createElement('i');
+      tag.className = 'tag';
+      tag.textContent = item.tag;
+      li.appendChild(tag);
+    }
+
     box.appendChild(li);
   }
 }
@@ -306,6 +424,8 @@ function renderWindow() {
     btn.addEventListener('click', async () => {
       state.settings = await setSettings({ since: range.id });
       renderWindow();
+      // 时间范围只影响历史，历史条数要重新数。
+      refreshFootprint().catch(() => {});
     });
     box.appendChild(btn);
   }
@@ -433,6 +553,8 @@ $('scope').addEventListener('click', async (event) => {
   renderToggles();
   renderSubject();
   updateCta();
+  // 范围换了，统计的是另一批东西，重新数一遍。
+  refreshFootprint().catch(() => {});
 });
 
 $('btn-options').addEventListener('click', () => {
@@ -519,7 +641,7 @@ async function handleClean() {
       const range = TIME_RANGE_MAP[s.since];
       risks.push(
         range && range.ms
-          ? `永久删除最近 ${range.label} 以内的浏览历史`
+          ? `永久删除最近 ${range.label}以内的浏览历史`
           : '永久删除全部浏览历史',
       );
     }
@@ -578,6 +700,16 @@ async function handleClean() {
   state.busy = false;
   $('btn-clean').classList.remove('is-busy');
   updateCta();
+
+  // 数据变了，重新数一遍。面板此刻正显示「已清空」，所以只更新数据，不重绘。
+  if (scope !== SCOPE.CURRENT) {
+    state.footprint = await measureFootprint({
+      scope,
+      origins,
+      since: TIME_RANGE_MAP[s.since] ? TIME_RANGE_MAP[s.since].ms : 0,
+      keepLogin: s.keepLogin,
+    });
+  }
 
   await pushCleanHistory({
     scope,
@@ -770,47 +902,44 @@ function showNotice(title, sub) {
 
 /** 清理完成后，图例换成逐项结果，圆环走满再变成 ✓ */
 function showResult(report, freed) {
-  const meter = $('meter');
-  const note = $('subject-note');
   const current = state.settings.scope === SCOPE.CURRENT;
 
-  if (current) {
-    meter.hidden = false;
-    note.hidden = true;
+  const rows = report.items.map((item) => ({
+    key: item.key,
+    label: item.label,
+    value:
+      item.status === 'error'
+        ? '失败'
+        : item.status === 'skipped'
+          ? item.note || '已跳过'
+          : item.note || '已清除',
+    state:
+      item.status === 'error' ? 'fail' : item.status === 'skipped' ? 'skip' : 'done',
+  }));
 
-    const rows = report.items.map((item) => ({
-      key: item.key,
-      label: item.label,
-      value:
-        item.status === 'error'
-          ? '失败'
-          : item.status === 'skipped'
-            ? item.note || '已跳过'
-            : item.note || '已清除',
-      state:
-        item.status === 'error' ? 'fail' : item.status === 'skipped' ? 'skip' : 'done',
-    }));
-
-    if (!rows.length) {
-      rows.push({ key: 'none', label: '没有勾选任何清理项', value: '' });
-    }
-    renderLegend(rows);
-
-    const meta = [];
-    if (freed) meta.push(`释放 ${formatBytes(freed)}`);
-    meta.push(`用时 ${formatDuration(report.durationMs)}`);
-    $('site-size').textContent = meta.join(' · ');
+  if (!rows.length) {
+    rows.push({ key: 'none', label: '没有勾选任何清理项', value: '' });
   }
 
-  // 圆环走完这一圈，再决定面板接下来显示什么。
+  const meta = [];
+  if (freed) meta.push(`释放 ${formatBytes(freed)}`);
+  meta.push(`用时 ${formatDuration(report.durationMs)}`);
+
+  // 圆环走完这一圈，再把图例换成逐项结果——
+  // 放在动画之后，才不会被「正在清理」的步骤状态覆盖掉具体数字。
   return finishProgress().then(() => {
-    if (current) return;
-    meter.hidden = true;
-    note.hidden = false;
+    renderLegend(rows);
+    $('meter').hidden = false;
+
+    if (current) {
+      $('subject-note').hidden = true;
+      $('site-size').textContent = meta.join(' · ');
+      return;
+    }
+
+    $('subject-note').hidden = false;
     const done = report.items.filter((i) => i.status === 'done').length;
-    note.innerHTML = `<b>${done} 项已清除</b><br>${
-      freed ? `释放 ${formatBytes(freed)} · ` : ''
-    }用时 ${formatDuration(report.durationMs)}`;
+    $('subject-note').innerHTML = `<b>${done} 项已清除</b><br>${meta.join(' · ')}`;
   });
 }
 

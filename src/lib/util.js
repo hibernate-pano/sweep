@@ -11,6 +11,23 @@ export function formatBytes(bytes) {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
 }
 
+/** 千分位：12480 → 12,480 */
+export function formatCount(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  return n.toLocaleString('zh-CN');
+}
+
+/**
+ * 大数字压缩：12480 → 1.2万。
+ * 圆心只有 70px 宽，长数字放不下，得先压短。
+ */
+export function formatCompact(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  if (n >= 100000) return `${Math.round(n / 10000)}万`;
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+  return n.toLocaleString('zh-CN');
+}
+
 export function formatWhen(ts) {
   if (!ts) return '从未';
   const d = new Date(ts);

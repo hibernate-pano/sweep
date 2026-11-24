@@ -16,18 +16,36 @@ export async function getSettings() {
   };
 }
 
-export async function setSettings(patch) {
-  const current = await getSettings();
-  const next = {
-    ...current,
-    ...patch,
-    items: { ...current.items, ...(patch.items || {}) },
-    auto: { ...current.auto, ...(patch.auto || {}) },
-    customOrigins: patch.customOrigins ?? current.customOrigins,
-    keepLogin: patch.keepLogin ?? current.keepLogin,
-  };
-  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
-  return next;
+/**
+ * 写设置。
+ *
+ * 这里做的是「读出来 → 改几个字段 → 整份写回」，所以两个写操作撞在一起时，
+ * 后写的那份会把先写的那份覆盖掉（切范围的同时改时间范围，范围就白改了）。
+ * 用一条链把所有写操作串起来，合并就一定发生在最新的一份上。
+ */
+let writeChain = Promise.resolve();
+
+export function setSettings(patch) {
+  const run = writeChain.then(async () => {
+    const current = await getSettings();
+    const next = {
+      ...current,
+      ...patch,
+      items: { ...current.items, ...(patch.items || {}) },
+      auto: { ...current.auto, ...(patch.auto || {}) },
+      customOrigins: patch.customOrigins ?? current.customOrigins,
+      keepLogin: patch.keepLogin ?? current.keepLogin,
+    };
+    await chrome.storage.local.set({ [SETTINGS_KEY]: next });
+    return next;
+  });
+
+  // 一条失败不能把后面的写操作一起卡住。
+  writeChain = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
 }
 
 export async function getCleanHistory() {

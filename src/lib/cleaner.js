@@ -30,7 +30,7 @@ export async function countCookies(origin) {
 }
 
 /** 清理某几个来源的浏览历史。browsingData 的 origins 不作用于 history，只能逐条删。 */
-async function clearHistoryForOrigins(origins, since) {
+async function clearHistoryForOrigins(origins, startTime) {
   let removed = 0;
   for (const origin of origins) {
     const host = hostOf(origin);
@@ -42,7 +42,7 @@ async function clearHistoryForOrigins(origins, since) {
       if (candidates.size) break;
       let hits = [];
       try {
-        hits = await chrome.history.search({ text: query, startTime: since || 0, maxResults: 5000 });
+        hits = await chrome.history.search({ text: query, startTime, maxResults: 5000 });
       } catch {
         hits = [];
       }
@@ -66,8 +66,7 @@ async function clearHistoryForOrigins(origins, since) {
  * 清空浏览历史。deleteRange 不返回数量，只能先数一遍；
  * 搜索有 maxResults 上限，数到上限就说明是近似值，返回 null 而不是给一个假数字。
  */
-async function clearAllHistory(since) {
-  const startTime = since || 0;
+async function clearAllHistory(startTime) {
   let count = null;
   try {
     const hits = await chrome.history.search({ text: '', startTime, maxResults: 10000 });
@@ -114,6 +113,12 @@ export async function runClean({
   const total = steps.length;
   let index = 0;
 
+  // since 是「往前多久」（毫秒时长），但 chrome.browsingData 的 since 和
+  // chrome.history 的 startTime 要的都是「绝对时间戳」。这里换算一次，
+  // 全流程用同一个时间点——不然两次 now() 差几毫秒，边界就对不上了。
+  // （传错的话，选「24 小时」会变成删掉 1970 年以来的全部数据。）
+  const cutoff = since ? Date.now() - since : 0;
+
   // excludeOrigins 对 Cookie 生效于整个可注册域，对存储只匹配精确 origin。
   // 所以两个都要给：否则 mail.google.com 的 LocalStorage 清不掉。
   const keepOrigins = [...new Set(
@@ -150,7 +155,7 @@ export async function runClean({
 
   try {
     if (scope === 'all') {
-      const base = { since, originTypes: WEB_ORIGIN_TYPES };
+      const base = { since: cutoff, originTypes: WEB_ORIGIN_TYPES };
       // 名单里的站只保 Cookie 和本地存储——那才是登录态所在。
       // 缓存和历史跟登录无关，照清；否则「保留登录」会顺带把缓存也留下。
       const excluded = keepOrigins.length ? { excludeOrigins: keepOrigins } : {};
@@ -164,8 +169,8 @@ export async function runClean({
       report.skipped = origins.filter((origin) => isKept(origin));
 
       if (origins.length) {
-        const every = { origins, since };
-        const unprotected = { origins: targets, since };
+        const every = { origins, since: cutoff };
+        const unprotected = { origins: targets, since: cutoff };
         if (items.cache) await run('cache', toDataTypeSet(['cache']), every);
         if (items.siteData) {
           if (targets.length) await run('siteData', toDataTypeSet(['siteData']), unprotected);
@@ -189,7 +194,7 @@ export async function runClean({
           report.items.push(resultRow('history', 'skipped', '已跳过'));
         } else {
           report.historyRemoved =
-            scope === 'all' ? await clearAllHistory(since) : await clearHistoryForOrigins(historyTargets, since);
+            scope === 'all' ? await clearAllHistory(cutoff) : await clearHistoryForOrigins(historyTargets, cutoff);
           report.items.push(
             resultRow(
               'history',
