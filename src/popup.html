@@ -54,6 +54,7 @@
           </div>
 
           <p class="subject-note" id="subject-note" hidden></p>
+          <p class="sr-only" id="live-status" role="status" aria-live="polite"></p>
         </section>
 
         <!-- 云端会话：本地清理动不了的部分 -->
@@ -82,7 +83,7 @@
         <section class="options">
           <div class="toggles" id="chips" role="group" aria-label="清理项目"></div>
           <p class="keep-note" id="keep-note" hidden></p>
-          <div class="window" id="window" hidden>
+          <div class="window" id="window" title="按时间过滤：缓存、站点数据、Cookie、历史都只清理这个时间范围内的。">
             <span class="window-label">时间范围</span>
             <div class="window-opts" id="range-opts" role="radiogroup" aria-label="时间范围"></div>
           </div>

@@ -34,7 +34,6 @@ const state = {
   busy: false,
   segments: [],
   footprint: null,
-  footprintLoading: false,
   footprintToken: 0,
 };
 
@@ -278,22 +277,28 @@ function scopeSummary() {
   const on = ITEM_DEFS.filter((d) => s.items[d.key]);
   if (!on.length) return '没有勾选任何清理项。';
 
-  const target =
-    s.scope === SCOPE.ALL ? '<b>所有网站</b>' : `<b>${s.customOrigins.length} 个自选站点</b>`;
+  const target = s.scope === SCOPE.ALL ? '<b>所有网站</b>' : `<b>${s.customOrigins.length} 个自选站点</b>`;
+  const range = TIME_RANGE_MAP[s.since];
+  const names = on.map((d) => d.label).join('、');
 
-  const bits = [];
-  if (s.items.history) {
-    const range = TIME_RANGE_MAP[s.since];
-    bits.push(range && range.ms ? `最近 ${range.label}以内的历史记录` : '全部历史记录');
+  // 时间范围是浏览器的全局过滤：缓存、站点数据、Cookie、历史都按它筛。
+  const rangeLine = range && range.ms ? `，只限最近 ${range.label}以内` : '';
+
+  // 「会不会登出」要说准：Cookie 和站点数据都会。站点数据不能漏——
+  // 很多站把登录令牌存在 localStorage 里，只提 Cookie 会让人以为还登录着。
+  const keepNote = s.keepLogin.length ? '（保留名单里的除外）' : '';
+  let loginLine;
+  if (s.items.cookies && s.items.siteData) {
+    loginLine = `包含 Cookie 和站点数据，会退出这些网站的登录${keepNote}。`;
+  } else if (s.items.cookies) {
+    loginLine = `包含 Cookie，会退出这些网站的登录${keepNote}。`;
+  } else if (s.items.siteData) {
+    loginLine = `包含站点数据，很多站把登录令牌存在这里，也会退出登录${keepNote}。`;
+  } else {
+    loginLine = '不含 Cookie 和站点数据，登录状态保留。';
   }
-  if (s.items.cache) bits.push('缓存');
-  if (s.items.siteData) bits.push('站点数据');
 
-  const head = `${target}的${bits.join('、') || '数据'}将被清除。`;
-  const cookieLine = s.items.cookies
-    ? `包含 Cookie，会退出这些网站的登录${s.keepLogin.length ? '（保留名单里的除外）' : ''}。`
-    : '不含 Cookie，登录状态保留。';
-  return `${head}${cookieLine}`;
+  return `${target}的${names}将被清除${rangeLine}。${loginLine}`;
 }
 
 function renderRing(segments, center) {
@@ -418,10 +423,9 @@ function renderKeepNote(kept) {
 }
 
 function renderWindow() {
+  // 时间范围对所有清理项都生效（浏览器的 since 是全局过滤），
+  // 所以这一行一直显示——藏起来会让人以为它只管历史记录。
   const row = $('window');
-  row.hidden = !state.settings.items.history;
-  if (row.hidden) return;
-
   const box = $('range-opts');
   box.textContent = '';
   for (const range of TIME_RANGES) {
@@ -434,7 +438,7 @@ function renderWindow() {
     btn.addEventListener('click', async () => {
       state.settings = await setSettings({ since: range.id });
       renderWindow();
-      // 时间范围只影响历史，历史条数要重新数。
+      // 时间范围变了，数出来的历史条数也要重新数。
       refreshFootprint().catch(() => {});
     });
     box.appendChild(btn);
@@ -614,6 +618,7 @@ $('btn-clean').addEventListener('click', () => {
     console.error(err);
     state.busy = false;
     updateCta();
+    announce('清理失败');
   });
 });
 
@@ -664,6 +669,8 @@ async function handleClean() {
     since: TIME_RANGE_MAP[s.since] ? TIME_RANGE_MAP[s.since].ms : 0,
     items: s.items,
     keepLogin: s.keepLogin,
+    // 当前标签页的来源要一并算进保留名单的展开，否则正在看的那个子域保不住。
+    currentOrigin: state.origin || '',
     onProgress: (step, index, total) => {
       advanceProgress(step, index, total);
     },
@@ -880,6 +887,11 @@ function markToggleDone(step) {
   if (btn) btn.classList.add('is-done');
 }
 
+/** 播报一句给屏幕阅读器。进度百分比不播报——每秒变一次会吵到人。 */
+function announce(text) {
+  $('live-status').textContent = text;
+}
+
 function showNotice(title, sub) {
   $('subject-note').hidden = false;
   $('meter').hidden = true;
@@ -912,6 +924,9 @@ function showResult(report, freed) {
   if (freed) meta.push(`释放 ${formatBytes(freed)}`);
   meta.push(`用时 ${formatDuration(report.durationMs)}`);
 
+  const done = report.items.filter((i) => i.status === 'done').length;
+  const failed = report.items.filter((i) => i.status === 'error').length;
+
   // 圆环走完这一圈，再把图例换成逐项结果——
   // 放在动画之后，才不会被「正在清理」的步骤状态覆盖掉具体数字。
   return finishProgress().then(() => {
@@ -921,12 +936,12 @@ function showResult(report, freed) {
     if (current) {
       $('subject-note').hidden = true;
       $('site-size').textContent = meta.join(' · ');
-      return;
+    } else {
+      $('subject-note').hidden = false;
+      $('subject-note').innerHTML = `<b>${done} 项已清除</b><br>${meta.join(' · ')}`;
     }
 
-    $('subject-note').hidden = false;
-    const done = report.items.filter((i) => i.status === 'done').length;
-    $('subject-note').innerHTML = `<b>${done} 项已清除</b><br>${meta.join(' · ')}`;
+    announce(failed ? `${done} 项已清除，${failed} 项失败` : `${done} 项已清除，${meta.join('，')}`);
   });
 }
 
@@ -954,6 +969,7 @@ async function applyCloudDelete(expectedTotal) {
     $('cloud-title').textContent = `已删除 ${result.deleted} 条云端会话`;
     $('cloud-sub').textContent = '账号里的历史记录也已清除';
     $('btn-cloud').hidden = true;
+    announce(`已删除 ${result.deleted} 条云端会话`);
     return;
   }
 
@@ -963,6 +979,7 @@ async function applyCloudDelete(expectedTotal) {
   $('cloud-sub').textContent = '接口可能已变更，请到网站内手动删除';
   $('btn-cloud').hidden = false;
   $('btn-cloud').textContent = '重新检测';
+  announce('云端会话删除失败');
 }
 
 /* ---------------------------------------------------------------- 对话框 */

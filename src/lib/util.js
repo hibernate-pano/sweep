@@ -87,25 +87,3 @@ export function registrableDomain(host) {
   if (MULTI_PART_TLDS.has(lastTwo) && parts.length >= 3) return parts.slice(-3).join('.');
   return lastTwo;
 }
-
-export function hostToOrigin(host) {
-  return `https://${host}`;
-}
-
-/** 由域名派生一个稳定的色相，让每个站点有固定的识别色 */
-export function hueOf(host) {
-  let hash = 0;
-  for (let i = 0; i < host.length; i += 1) {
-    hash = (hash * 31 + host.charCodeAt(i)) % 360;
-  }
-  return hash;
-}
-
-export function isValidOrigin(origin) {
-  try {
-    const u = new URL(origin);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}

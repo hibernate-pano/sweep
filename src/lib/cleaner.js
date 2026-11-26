@@ -79,14 +79,47 @@ async function clearAllHistory(startTime) {
 }
 
 /**
+ * 保留名单按主域名生效，但浏览器的存储删除只认「精确 origin」：
+ * excludeOrigins 里写 https://google.com，保不住 https://mail.google.com 的 LocalStorage。
+ * （Cookie 是例外——浏览器对 Cookie 按整个可注册域排除。）
+ * 所以要把名单域名下真实用过的来源逐个找出来，才能真的保住它们的站点数据。
+ *
+ * 来源从历史里找：有过访问的子域才可能有 localStorage / IndexedDB。
+ */
+async function originsUnderDomain(domain, extraOrigin) {
+  const hosts = new Set([domain]);
+
+  const addHost = (url) => {
+    const host = hostOf(url);
+    if (host && (host === domain || host.endsWith(`.${domain}`))) hosts.add(host);
+  };
+
+  if (extraOrigin) addHost(extraOrigin);
+
+  try {
+    const hits = await chrome.history.search({ text: domain, maxResults: 1000 });
+    for (const item of hits) addHost(item.url);
+  } catch {}
+
+  // http 和 https 都要列：浏览器按完整 origin 匹配，只写一个 scheme 另一个就漏了。
+  const origins = [];
+  for (const host of hosts) {
+    origins.push(`https://${host}`);
+    origins.push(`http://${host}`);
+  }
+  return origins;
+}
+
+/**
  * 主清理流程。
  *
  * @param {object} opts
  * @param {'current'|'all'|'custom'} opts.scope
  * @param {string[]} opts.origins   scope 为 current/custom 时的目标来源
- * @param {number} opts.since       毫秒时间戳，0 表示不限时间
+ * @param {number} opts.since       毫秒时长，0 表示不限时间
  * @param {object} opts.items       { cache, siteData, cookies, history } 开关
  * @param {string[]} opts.keepLogin 保留登录状态的域名（不动 Cookie 和本地存储，缓存与历史照清）
+ * @param {string} [opts.currentOrigin] 当前标签页的来源，用于补全保留名单里的子域
  * @param {(step:string, index:number, total:number)=>void} opts.onProgress
  */
 export async function runClean({
@@ -95,6 +128,7 @@ export async function runClean({
   since = 0,
   items = {},
   keepLogin = [],
+  currentOrigin = '',
   onProgress = () => {},
 }) {
   const started = Date.now();
@@ -121,12 +155,18 @@ export async function runClean({
 
   // excludeOrigins 对 Cookie 生效于整个可注册域，对存储只匹配精确 origin。
   // 所以两个都要给：否则 mail.google.com 的 LocalStorage 清不掉。
-  const keepOrigins = [...new Set(
+  const keepDomains = [...new Set(
     keepLogin.flatMap((h) => {
       const host = h.includes('://') ? hostOf(h) : h;
-      return [`https://${host}`, `https://${registrableDomain(host)}`];
-    }),
+      return [host, registrableDomain(host)];
+    }).filter(Boolean),
   )];
+
+  // 把名单域名下的真实来源展开成精确 origin，站点数据才真的保得住。
+  const keepOrigins = [];
+  for (const domain of keepDomains) {
+    keepOrigins.push(...(await originsUnderDomain(domain, currentOrigin)));
+  }
 
   const isKept = (origin) => {
     if (!keepOrigins.length) return false;
