@@ -15,6 +15,15 @@
         --signal: #1b54e4;
       }
       * { box-sizing: border-box; }
+      :root { --frame-h: 497px; --scale: 1.45; }
+      :root[data-dark='1'] {
+        --page: #0e1014;
+        --rule: #2a2f38;
+        --ink: #edf0f5;
+        --ink-2: #98a2b0;
+        --ink-3: #6b7482;
+        --signal: #6e9bff;
+      }
       html, body { margin: 0; padding: 0; }
       body {
         width: 1280px;
@@ -38,6 +47,13 @@
       }
 
       .copy { flex: 1; min-width: 0; }
+
+      .brand { display: flex; align-items: center; gap: 9px; margin-bottom: 30px; }
+      .brand svg { width: 21px; height: 21px; overflow: visible; }
+      .mark-track { fill: none; stroke: var(--rule); stroke-width: 2.2; }
+      .mark-arc { fill: none; stroke: var(--signal); stroke-width: 2.2; stroke-linecap: round; }
+      .mark-block { fill: var(--signal); }
+      .brand b { font-size: 17px; font-weight: 620; letter-spacing: 0.01em; }
 
       .eyebrow {
         display: inline-flex;
@@ -105,12 +121,12 @@
       /* 弹窗本体：等比放大后放进一个卡片里 */
       .shot { flex: none; }
       .shot-inner {
-        width: 413px;
-        height: 720px;
+        width: calc(344px * var(--scale));
+        height: calc(var(--frame-h) * var(--scale));
       }
       .frame {
         width: 344px;
-        height: 600px;
+        height: var(--frame-h);
         overflow: hidden;
         border-radius: 13px;
         border: 1px solid var(--rule);
@@ -118,12 +134,12 @@
         box-shadow:
           0 1px 2px rgba(11, 15, 22, 0.06),
           0 18px 44px rgba(11, 15, 22, 0.16);
-        transform: scale(1.2);
+        transform: scale(var(--scale));
         transform-origin: top left;
       }
       .frame iframe {
         width: 344px;
-        height: 600px;
+        height: var(--frame-h);
         border: 0;
         display: block;
       }
@@ -156,7 +172,15 @@
   </head>
   <body>
     <div class="stage">
-      <div class="copy">
+      <div class="copy" data-variant="all">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.6" class="mark-track" />
+            <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
+            <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
+          </svg>
+          <b>Sweep</b>
+        </div>
         <span class="eyebrow">CHROME 扩展</span>
         <h1>一次点击<br />清掉<em>浏览痕迹</em></h1>
         <p class="lede">
@@ -169,11 +193,54 @@
           <li><b>登录能保住</b>：保留名单里的站，Cookie 与站点数据不动。</li>
         </ul>
       </div>
+      <div class="copy" data-variant="current" hidden>
+        <div class="brand">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.6" class="mark-track" />
+            <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
+            <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
+          </svg>
+          <b>Sweep</b>
+        </div>
+        <span class="eyebrow">当前网站</span>
+        <h1>这个站<br />留下了<em>什么</em></h1>
+        <p class="lede">
+          打开面板就能看到：这个站存了多少条本地数据、<br />
+          占了几 MB，分别在哪些地方。
+        </p>
+        <ul class="points">
+          <li><b>本地存储</b>——偏好设置、草稿，还有很多站的登录令牌。</li>
+          <li><b>数据库</b>——离线内容、消息缓存，体积最大的一块。</li>
+          <li><b>离线缓存</b>——Service Worker 存下来的离线包。</li>
+        </ul>
+      </div>
       <div class="shot">
         <div class="shot-inner">
-          <div class="frame"><iframe src="/src/popup.html" title="Clear Browsing Data" scrolling="no"></iframe></div>
+          <div class="frame"><iframe src="/src/popup.html?tab=https://github.com/anthropics/claude-code" title="Sweep" scrolling="no"></iframe></div>
         </div>
       </div>
     </div>
+    <script>
+      // 文案跟着场景换：两个场景讲两件事。
+      // 这段必须等 DOM 建好——head 里的脚本这时还找不到 .copy。
+      (() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('theme') === 'dark') document.documentElement.dataset.dark = '1';
+        const variant = params.get('copy') || 'all';
+        document.querySelectorAll('.copy').forEach((el) => {
+          el.hidden = el.dataset.variant !== variant;
+        });
+        // 面板高度随范围变（「当前网站」多一行站点信息）。
+        // 照着实际高度定画布，两种场景的卡片一样高，截图摆在一起才齐。
+        const root = document.documentElement.style;
+        if (variant === 'current') {
+          root.setProperty('--frame-h', '534px');
+          root.setProperty('--scale', '1.35');
+        } else {
+          root.setProperty('--frame-h', '497px');
+          root.setProperty('--scale', '1.45');
+        }
+      })();
+    </script>
   </body>
 </html>

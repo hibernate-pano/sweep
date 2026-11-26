@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>商店小宣传图</title>
+    <style>
+      :root {
+        --paper: #edeff3;
+        --rule: #d3dae4;
+        --ink: #0b0f16;
+        --ink-2: #4c5566;
+        --signal: #1b54e4;
+      }
+      :root[data-dark='1'] {
+        --paper: #0e1014;
+        --rule: #2a2f38;
+        --ink: #edf0f5;
+        --ink-2: #98a2b0;
+        --signal: #6e9bff;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        width: 440px;
+        height: 280px;
+        overflow: hidden;
+        background:
+          radial-gradient(340px 220px at 84% 8%, rgba(27, 84, 228, 0.13), transparent 66%),
+          var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+          'Microsoft YaHei', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .tile {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+        padding: 34px 36px 32px;
+      }
+      .mark { width: 46px; height: 46px; overflow: visible; }
+      .mark-track { fill: none; stroke: var(--rule); stroke-width: 2.2; }
+      .mark-arc { fill: none; stroke: var(--signal); stroke-width: 2.2; stroke-linecap: round; }
+      .mark-block { fill: var(--signal); }
+      h1 {
+        margin: 0;
+        font-size: 40px;
+        line-height: 1.1;
+        font-weight: 660;
+        letter-spacing: -0.025em;
+      }
+      p {
+        margin: 10px 0 0;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--ink-2);
+      }
+    </style>
+    <script>
+      (() => {
+        if (new URLSearchParams(location.search).get('theme') === 'dark') {
+          document.documentElement.dataset.dark = '1';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="tile">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.6" class="mark-track" />
+        <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
+        <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
+      </svg>
+      <div>
+        <h1>Sweep</h1>
+        <p>一次点击，清掉浏览痕迹</p>
+      </div>
+    </div>
+  </body>
+</html>
