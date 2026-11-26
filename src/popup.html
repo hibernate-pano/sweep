@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="color-scheme" content="dark light" />
-    <title>Clear Browsing Data</title>
+    <title>Sweep</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -15,7 +15,7 @@
             <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
             <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
           </svg>
-          <span class="wordmark">Clear Browsing Data</span>
+          <span class="wordmark">Sweep</span>
         </div>
         <button id="btn-options" class="icon-btn" type="button" title="设置" aria-label="打开设置">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -57,15 +57,6 @@
           <p class="sr-only" id="live-status" role="status" aria-live="polite"></p>
         </section>
 
-        <!-- 云端会话：本地清理动不了的部分 -->
-        <section class="cloud" id="cloud-card" hidden>
-          <div class="cloud-body">
-            <p class="cloud-title" id="cloud-title"></p>
-            <p class="cloud-sub" id="cloud-sub"></p>
-          </div>
-          <button class="text-btn" id="btn-cloud" type="button">删除</button>
-        </section>
-
         <!-- 动作 -->
         <section class="action">
           <div class="scope" id="scope" role="radiogroup" aria-label="清理范围">
@@ -96,17 +87,6 @@
         <button class="link" id="btn-reset" type="button">重置选项</button>
       </footer>
     </div>
-
-    <dialog id="confirm-dialog">
-      <form method="dialog">
-        <h3 id="confirm-title"></h3>
-        <p id="confirm-body"></p>
-        <menu>
-          <button value="cancel" class="ghost-btn" id="confirm-cancel" type="submit">取消</button>
-          <button value="ok" class="danger-btn" id="confirm-ok" type="submit">确认</button>
-        </menu>
-      </form>
-    </dialog>
 
     <script type="module" src="popup.js"></script>
   </body>

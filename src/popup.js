@@ -1,8 +1,13 @@
-import { ITEM_DEFS, SCOPE, TIME_RANGES, TIME_RANGE_MAP } from './lib/constants.js';
-import { getCleanHistory, getSettings, pushCleanHistory, setSettings } from './lib/settings.js';
-import { countCookies, runClean } from './lib/cleaner.js';
+import { ITEM_DEFS, SCOPE, SCOPE_LABEL, TIME_RANGES, TIME_RANGE_MAP } from './lib/constants.js';
+import {
+  getCleanHistory,
+  getSettings,
+  pushCleanHistory,
+  setSettings,
+  updateSettings,
+} from './lib/settings.js';
+import { runClean } from './lib/cleaner.js';
 import { measureFootprint } from './lib/footprint.js';
-import { deleteCloud, matchChatSite, probeCloud } from './lib/chat.js';
 import { probePage } from './lib/pageScripts.js';
 import {
   formatBytes,
@@ -28,9 +33,6 @@ const state = {
   origin: null,
   host: '',
   probe: null,
-  cookies: null,
-  chatSite: null,
-  cloud: null,
   busy: false,
   segments: [],
   footprint: null,
@@ -95,21 +97,9 @@ async function loadTab() {
   $('site-host').textContent = state.host;
   setFavicon(state.tab.url, state.host);
 
-  const [probe, cookies] = await Promise.all([
-    probeSite(state.tab.id),
-    countCookies(state.origin),
-  ]);
-  state.probe = probe;
-  state.cookies = cookies;
+  state.probe = await probeSite(state.tab.id);
   renderSubject();
   updateCta();
-
-  const site = matchChatSite(tab.url);
-  if (site) {
-    state.chatSite = site;
-    state.cloud = await probeCloud(state.tab.id, site);
-    renderCloud();
-  }
 }
 
 async function probeSite(tabId) {
@@ -207,12 +197,14 @@ function renderSubject() {
   const meter = $('meter');
   const note = $('subject-note');
 
-  if (scope !== SCOPE.CURRENT) {
-    $('subject-line').hidden = true;
-    meter.hidden = false;
-    note.hidden = false;
-    note.innerHTML = scopeSummary();
+  // 三种范围都要显示这句摘要：它写着「会不会退出登录」「时间范围管到哪些」，
+  // 这些是最容易踩坑的地方，不能只在「全部网站」范围才看得到。
+  $('subject-line').hidden = scope !== SCOPE.CURRENT;
+  meter.hidden = false;
+  note.hidden = false;
+  note.innerHTML = scopeSummary();
 
+  if (scope !== SCOPE.CURRENT) {
     if (!state.footprint) {
       // 还在数：先占个位，别让圆盘空着。
       renderRing([], { value: '…', label: '统计中', empty: true });
@@ -231,10 +223,6 @@ function renderSubject() {
     );
     return;
   }
-
-  $('subject-line').hidden = false;
-  meter.hidden = false;
-  note.hidden = true;
 
   const usage = state.probe && typeof state.probe.usage === 'number' ? state.probe.usage : null;
   $('site-size').textContent = usage === null ? '' : formatBytes(usage);
@@ -277,7 +265,12 @@ function scopeSummary() {
   const on = ITEM_DEFS.filter((d) => s.items[d.key]);
   if (!on.length) return '没有勾选任何清理项。';
 
-  const target = s.scope === SCOPE.ALL ? '<b>所有网站</b>' : `<b>${s.customOrigins.length} 个自选站点</b>`;
+  const target =
+    s.scope === SCOPE.ALL
+      ? '<b>所有网站</b>'
+      : s.scope === SCOPE.CUSTOM
+        ? `<b>${s.customOrigins.length} 个自选站点</b>`
+        : `<b>${state.host || '当前网站'}</b>`;
   const range = TIME_RANGE_MAP[s.since];
   const names = on.map((d) => d.label).join('、');
 
@@ -402,17 +395,28 @@ function renderToggles() {
     if (isKept) btn.dataset.kept = '1';
     btn.setAttribute('aria-pressed', String(Boolean(state.settings.items[def.key])));
     btn.addEventListener('click', async () => {
-      const items = { ...state.settings.items };
-      items[def.key] = !items[def.key];
-      state.settings = await setSettings({ items });
+      if (state.busy) return;
+      // 用 updateSettings：改的是「当前状态」，不是一份读出来的旧快照。
+      // 快速点两个开关时，两次都作用在最新的一份上，不会互相冲掉。
+      state.settings = await updateSettings((s) => ({
+        items: { ...s.items, [def.key]: !s.items[def.key] },
+      }));
       renderToggles();
       renderWindow();
       renderSubject();
       updateCta();
+      // 按钮是重画过的，焦点丢了——放回刚点的那个，键盘用户不用重新 Tab。
+      refocus('chips', def.key);
     });
     box.appendChild(btn);
   }
   renderKeepNote(kept);
+}
+
+/** 重建 DOM 之后把焦点放回原来的那个控件上。 */
+function refocus(containerId, key) {
+  const btn = document.querySelector(`#${containerId} [data-key="${key}"]`);
+  if (btn) btn.focus();
 }
 
 /** 说清楚哪两项被保住了——方格太小，塞不下「保留」两个字 */
@@ -425,7 +429,6 @@ function renderKeepNote(kept) {
 function renderWindow() {
   // 时间范围对所有清理项都生效（浏览器的 since 是全局过滤），
   // 所以这一行一直显示——藏起来会让人以为它只管历史记录。
-  const row = $('window');
   const box = $('range-opts');
   box.textContent = '';
   for (const range of TIME_RANGES) {
@@ -433,13 +436,16 @@ function renderWindow() {
     btn.type = 'button';
     btn.className = 'window-opt';
     btn.textContent = range.label;
+    btn.dataset.key = range.id;
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(state.settings.since === range.id));
     btn.addEventListener('click', async () => {
+      if (state.busy) return;
       state.settings = await setSettings({ since: range.id });
       renderWindow();
       // 时间范围变了，数出来的历史条数也要重新数。
       refreshFootprint().catch(() => {});
+      refocus('range-opts', range.id);
     });
     box.appendChild(btn);
   }
@@ -489,38 +495,6 @@ function renderCustom() {
   }
 }
 
-function renderCloud() {
-  const card = $('cloud-card');
-  const site = state.chatSite;
-  if (!site) {
-    card.hidden = true;
-    return;
-  }
-
-  card.hidden = false;
-  card.classList.remove('is-done', 'is-fail');
-
-  if (!state.cloud) {
-    $('cloud-title').textContent = `${site.label} 云端会话`;
-    $('cloud-sub').textContent = '未能读取，可能未登录或接口已变更';
-    $('btn-cloud').hidden = false;
-    $('btn-cloud').textContent = '重新检测';
-    return;
-  }
-
-  if (state.cloud.total === 0) {
-    $('cloud-title').textContent = `${site.label} 云端会话`;
-    $('cloud-sub').textContent = '账号里没有会话记录';
-    $('btn-cloud').hidden = true;
-    return;
-  }
-
-  $('btn-cloud').hidden = false;
-  $('btn-cloud').textContent = '删除';
-  $('cloud-title').textContent = `${site.label} 云端还有 ${state.cloud.total} 条会话`;
-  $('cloud-sub').textContent = '本地清理不会删掉账号里的记录';
-}
-
 function updateCta() {
   const s = state.settings;
   let label;
@@ -541,6 +515,12 @@ function updateCta() {
     state.busy ||
     (s.scope === SCOPE.CURRENT && noPage) ||
     (s.scope === SCOPE.CUSTOM && s.customOrigins.length === 0);
+
+  // 清理进行中把别的控件锁住：中途改范围或改时间，
+  // 进度圆环会被冲掉，最后显示的数字也会跟这次清理对不上。
+  document.querySelectorAll('.scope button, .window-opt, .toggle, .custom .pill button').forEach((btn) => {
+    btn.disabled = state.busy;
+  });
 }
 
 async function renderFooter() {
@@ -588,35 +568,13 @@ $('btn-reset').addEventListener('click', async () => {
   updateCta();
 });
 
-$('btn-cloud').addEventListener('click', async () => {
-  if (!state.chatSite) return;
-  const site = state.chatSite;
-
-  if (!state.cloud) {
-    $('btn-cloud').disabled = true;
-    $('cloud-title').textContent = `正在检测 ${site.label} 云端会话…`;
-    $('cloud-sub').textContent = '';
-    state.cloud = await probeCloud(state.tab.id, site);
-    $('btn-cloud').disabled = false;
-    renderCloud();
-    return;
-  }
-
-  const count = state.cloud.total;
-  const confirmed = await confirmDialog({
-    title: `删除 ${site.label} 的云端会话？`,
-    body: `将永久删除账号里的 ${count} 条会话记录，无法撤销。`,
-    okText: '永久删除',
-  });
-  if (!confirmed) return;
-
-  await applyCloudDelete(count);
-});
-
 $('btn-clean').addEventListener('click', () => {
   handleClean().catch((err) => {
     console.error(err);
+    // 异常路径也要停掉动画：不然圆环会永远停在「99% 清理中」并一直占着 CPU。
+    stopProgress();
     state.busy = false;
+    $('btn-clean').classList.remove('is-busy');
     updateCta();
     announce('清理失败');
   });
@@ -637,19 +595,15 @@ async function handleClean() {
   const origins =
     scope === SCOPE.ALL ? [] : scope === SCOPE.CURRENT ? [state.origin] : [...s.customOrigins];
 
-  if (scope !== SCOPE.ALL && origins.length === 0) {
-    showNotice('没有可清理的站点', '先在下面添加想清理的网站');
-    return;
-  }
+  // 没有可清理的来源时主按钮本来就是禁用的，这里只是兜底。
+  if (scope !== SCOPE.ALL && origins.length === 0) return;
 
   // 当前站点在「保留登录状态」名单里不是错误：缓存和历史照清，
   // 只有 Cookie 和站点数据会被保住，所以不在这里拦下。
 
-  // 主按钮只清浏览器本地的数据。
-  // 账号里的云端会话是另一件事，只由卡片上那个独立的「删除」按钮触发，并且单独确认——
-  // 一个叫「清浏览数据」的按钮不该顺手删掉你账号里的东西。
+  // 主按钮只清浏览器本地的数据——不碰账号里的东西。
 
-  // 这里不再二次确认：这个扩展存在的意义就是「一下就清掉」，
+  // 这里不二次确认：这个扩展存在的意义就是「一下就清掉」，
   // 每次都弹窗等于把它变成 Chrome 自己的设置页。想控制范围，用上面的范围和时间范围。
 
   state.busy = true;
@@ -690,7 +644,9 @@ async function handleClean() {
   }
 
   // 等收尾动画走完，按钮再变回可点的样子。
-  await showResult(report, freed);
+  // scope 用这次清理开始时捕获的那份——中途改了范围的话，
+  // 拿现在的范围来渲染结果，会显示成「清了另一个范围」。
+  await showResult(report, freed, scope);
   state.busy = false;
   $('btn-clean').classList.remove('is-busy');
   updateCta();
@@ -892,23 +848,25 @@ function announce(text) {
   $('live-status').textContent = text;
 }
 
-function showNotice(title, sub) {
-  $('subject-note').hidden = false;
-  $('meter').hidden = true;
-  $('subject-note').innerHTML = `<b>${title}</b><br>${sub}`;
-  $('site-size').textContent = '';
-}
-
 /** 清理完成后，图例换成逐项结果，圆环走满再变成 ✓ */
-function showResult(report, freed) {
-  const current = state.settings.scope === SCOPE.CURRENT;
+function showResult(report, freed, scope) {
+  const current = scope === SCOPE.CURRENT;
+
+  // 失败要带原因，不能只写「失败」两个字——
+  // 浏览器返回的原始错误才是用户（和排障的人）看得懂的东西。
+  const reasonFor = (key) => {
+    const line = report.errors.find((e) => e.startsWith(`${key}:`));
+    if (!line) return '失败';
+    const msg = line.slice(key.length + 1).trim();
+    return msg ? `失败：${msg}` : '失败';
+  };
 
   const rows = report.items.map((item) => ({
     key: item.key,
     label: item.label,
     value:
       item.status === 'error'
-        ? '失败'
+        ? reasonFor(item.key)
         : item.status === 'skipped'
           ? item.note || '已跳过'
           : item.note || '已清除',
@@ -942,59 +900,5 @@ function showResult(report, freed) {
     }
 
     announce(failed ? `${done} 项已清除，${failed} 项失败` : `${done} 项已清除，${meta.join('，')}`);
-  });
-}
-
-/**
- * 执行云端会话删除，并把真实结果写回卡片。
- * deleted === 0 但原本有会话，说明接口拒绝了请求，必须报失败而不是「已删除 0 条」。
- */
-async function applyCloudDelete(expectedTotal) {
-  const card = $('cloud-card');
-  const site = state.chatSite;
-  if (!card || !site) return;
-
-  card.classList.remove('is-done', 'is-fail');
-  $('cloud-title').textContent = `正在删除 ${site.label} 云端会话…`;
-  $('cloud-sub').textContent = '不要关闭这个面板';
-  $('btn-cloud').disabled = true;
-
-  const result = await deleteCloud(state.tab.id, site);
-
-  $('btn-cloud').disabled = false;
-
-  if (result && result.ok && (result.deleted > 0 || expectedTotal === 0)) {
-    state.cloud = { total: 0 };
-    card.classList.add('is-done');
-    $('cloud-title').textContent = `已删除 ${result.deleted} 条云端会话`;
-    $('cloud-sub').textContent = '账号里的历史记录也已清除';
-    $('btn-cloud').hidden = true;
-    announce(`已删除 ${result.deleted} 条云端会话`);
-    return;
-  }
-
-  state.cloud = null;
-  card.classList.add('is-fail');
-  $('cloud-title').textContent = '云端会话删除失败';
-  $('cloud-sub').textContent = '接口可能已变更，请到网站内手动删除';
-  $('btn-cloud').hidden = false;
-  $('btn-cloud').textContent = '重新检测';
-  announce('云端会话删除失败');
-}
-
-/* ---------------------------------------------------------------- 对话框 */
-
-function confirmDialog({ title, body, okText }) {
-  const dlg = $('confirm-dialog');
-  $('confirm-title').textContent = title;
-  $('confirm-body').textContent = body;
-  $('confirm-ok').textContent = okText || '确认';
-  return new Promise((resolve) => {
-    const onClose = () => {
-      dlg.removeEventListener('close', onClose);
-      resolve(dlg.returnValue === 'ok');
-    };
-    dlg.addEventListener('close', onClose);
-    dlg.showModal();
   });
 }

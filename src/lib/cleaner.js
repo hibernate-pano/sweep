@@ -19,19 +19,14 @@ function resultRow(key, status, note) {
   return { key, label: ITEM_MAP[key].label, status, note: note || '' };
 }
 
-/** 当前站点在这个范围内的 Cookie 数量（仅用于给用户一个预期） */
-export async function countCookies(origin) {
-  try {
-    const cookies = await chrome.cookies.getAll({ url: origin });
-    return cookies.length;
-  } catch {
-    return null;
-  }
-}
-
-/** 清理某几个来源的浏览历史。browsingData 的 origins 不作用于 history，只能逐条删。 */
+/**
+ * 清理某几个来源的浏览历史。browsingData 的 origins 不作用于 history，只能逐条删。
+ * 搜索有 maxResults 上限：撞到上限说明还有更多没删完，返回 null（表示「至少这么多」）
+ * 而不是给一个假的精确数字。
+ */
 async function clearHistoryForOrigins(origins, startTime) {
   let removed = 0;
+  let capped = false;
   for (const origin of origins) {
     const host = hostOf(origin);
     if (!host) continue;
@@ -46,6 +41,7 @@ async function clearHistoryForOrigins(origins, startTime) {
       } catch {
         hits = [];
       }
+      if (hits.length >= 5000) capped = true;
       for (const item of hits) {
         const h = hostOf(item.url);
         if (h === host || h.endsWith(`.${host}`)) candidates.add(item.url);
@@ -59,7 +55,7 @@ async function clearHistoryForOrigins(origins, startTime) {
       } catch {}
     }
   }
-  return removed;
+  return capped ? null : removed;
 }
 
 /**
@@ -97,7 +93,9 @@ async function originsUnderDomain(domain, extraOrigin) {
   if (extraOrigin) addHost(extraOrigin);
 
   try {
-    const hits = await chrome.history.search({ text: domain, maxResults: 1000 });
+    // startTime 必须给 0：不传的话浏览器默认只查最近 24 小时，
+    // 三天前访问过的子域就找不到了，保留名单对它就失效。
+    const hits = await chrome.history.search({ text: domain, startTime: 0, maxResults: 1000 });
     for (const item of hits) addHost(item.url);
   } catch {}
 
@@ -174,12 +172,21 @@ export async function runClean({
     return keepOrigins.includes(`https://${host}`) || keepOrigins.includes(`https://${registrableDomain(host)}`);
   };
 
-  const run = async (key, dataTypes, options) => {
+  /**
+   * 执行一次清理。parts 是同一项里的多次调用——它们必须分开，
+   * 因为浏览器的 origin 过滤（origins / excludeOrigins）只支持
+   * cookies 与存储类数据，formData 不在其中：混在同一次调用里，
+   * 整个调用会被浏览器拒绝（Chromium: kFilterableDataTypes 不含 FORM_DATA），
+   * 结果是 Cookie 一条都没删掉。
+   */
+  const run = async (key, parts, note) => {
     index += 1;
     onProgress(key, index, total);
     try {
-      await chrome.browsingData.remove(options, dataTypes);
-      report.items.push(resultRow(key, 'done', ''));
+      for (const part of parts) {
+        await chrome.browsingData.remove(part.options, part.dataTypes);
+      }
+      report.items.push(resultRow(key, 'done', note || ''));
     } catch (e) {
       report.errors.push(`${key}: ${e && e.message ? e.message : e}`);
       report.items.push(resultRow(key, 'error', '失败'));
@@ -200,25 +207,50 @@ export async function runClean({
       // 缓存和历史跟登录无关，照清；否则「保留登录」会顺带把缓存也留下。
       const excluded = keepOrigins.length ? { excludeOrigins: keepOrigins } : {};
 
-      if (items.cache) await run('cache', toDataTypeSet(['cache']), base);
-      if (items.siteData) await run('siteData', toDataTypeSet(['siteData']), { ...base, ...excluded });
-      if (items.cookies) await run('cookies', toDataTypeSet(['cookies']), { ...base, ...excluded });
+      if (items.cache) await run('cache', [{ dataTypes: toDataTypeSet(['cache']), options: base }]);
+      if (items.siteData) {
+        await run('siteData', [{ dataTypes: toDataTypeSet(['siteData']), options: { ...base, ...excluded } }]);
+      }
+      if (items.cookies) {
+        await run(
+          'cookies',
+          [
+            { dataTypes: { cookies: true }, options: { ...base, ...excluded } },
+            // 自动填充的表单数据是浏览器级的一份表单历史，不按站点存放，
+            // 所以只能整体清。放在「全部网站」范围里做。
+            { dataTypes: { formData: true }, options: base },
+          ],
+          '含自动填充表单数据',
+        );
+      }
     } else {
       // 命中名单的来源照清缓存，但不动它的 Cookie 和站点数据。
       const targets = origins.filter((origin) => !isKept(origin));
-      report.skipped = origins.filter((origin) => isKept(origin));
 
       if (origins.length) {
-        const every = { origins, since: cutoff };
-        const unprotected = { origins: targets, since: cutoff };
-        if (items.cache) await run('cache', toDataTypeSet(['cache']), every);
+        // originTypes 也要带上：装了成桌面应用的站（hosted app）算 protectedWeb，
+        // 不写这一项的话那些站的数据根本不会被清。
+        const every = { origins, since: cutoff, originTypes: WEB_ORIGIN_TYPES };
+        const only = { origins: targets, since: cutoff, originTypes: WEB_ORIGIN_TYPES };
+
+        if (items.cache) await run('cache', [{ dataTypes: toDataTypeSet(['cache']), options: every }]);
         if (items.siteData) {
-          if (targets.length) await run('siteData', toDataTypeSet(['siteData']), unprotected);
-          else skip('siteData', '已保留');
+          if (targets.length) {
+            await run('siteData', [{ dataTypes: toDataTypeSet(['siteData']), options: only }]);
+          } else {
+            skip('siteData', '已保留');
+          }
         }
         if (items.cookies) {
-          if (targets.length) await run('cookies', toDataTypeSet(['cookies']), unprotected);
-          else skip('cookies', '已保留');
+          if (targets.length) {
+            await run(
+              'cookies',
+              [{ dataTypes: { cookies: true }, options: only }],
+              '自动填充表单数据未清（它不按站点存放）',
+            );
+          } else {
+            skip('cookies', '已保留');
+          }
         }
       }
     }

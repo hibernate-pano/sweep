@@ -8,17 +8,28 @@ let settings = null;
 
 /* ---------------------------------------------------------------- 主题 */
 
-function applyTheme(pref) {
-  const media = window.matchMedia('(prefers-color-scheme: light)');
-  const resolve = () => {
-    document.documentElement.dataset.theme =
-      pref === 'system' ? (media.matches ? 'light' : 'dark') : pref;
-  };
-  resolve();
-  media.addEventListener('change', () => {
-    if (pref === 'system') resolve();
-  });
+/**
+ * 主题只注册一个监听器。
+ *
+ * 之前每次 applyTheme 都新加一个 matchMedia 监听，旧的监听器还闭包着旧的偏好：
+ * 用户显式选了「深色」之后，系统主题一变，旧监听器就会按「跟随系统」把主题改回去。
+ */
+const media = window.matchMedia('(prefers-color-scheme: light)');
+let themePref = 'system';
+
+function resolveTheme() {
+  document.documentElement.dataset.theme =
+    themePref === 'system' ? (media.matches ? 'light' : 'dark') : themePref;
 }
+
+function applyTheme(pref) {
+  themePref = pref;
+  resolveTheme();
+}
+
+media.addEventListener('change', () => {
+  if (themePref === 'system') resolveTheme();
+});
 
 /* ---------------------------------------------------------------- 初始化 */
 
@@ -123,6 +134,8 @@ function renderSince() {
     btn.type = 'button';
     btn.textContent = range.label;
     btn.dataset.since = range.id;
+    // aria-checked 只在 role=radio 上有效，缺了就是非法 ARIA。
+    btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(settings.since === range.id));
     btn.addEventListener('click', async () => {
       settings = await setSettings({ since: range.id });

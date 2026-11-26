@@ -58,9 +58,9 @@ export async function measureFootprint({ scope, origins = [], since = 0, keepLog
   let capped = false;
   try {
     // since 是「往前多久」，history.search 的 startTime 要的是绝对时间戳。
-    // 不传 text：走的是整表查询，比全文检索快，也一样是「全部历史」。
+    // text 是必填的（留空串 = 取全部记录），漏了会让整个调用被浏览器拒绝。
     const startTime = since ? Date.now() - since : 0;
-    items = await chrome.history.search({ startTime, maxResults: HISTORY_LIMIT });
+    items = await chrome.history.search({ text: '', startTime, maxResults: HISTORY_LIMIT });
     capped = items.length >= HISTORY_LIMIT;
   } catch {
     items = [];

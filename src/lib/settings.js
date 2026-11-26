@@ -25,9 +25,17 @@ export async function getSettings() {
  */
 let writeChain = Promise.resolve();
 
-export function setSettings(patch) {
+/**
+ * 按「当前状态」改一次设置。
+ *
+ * setSettings 传的是「要写成什么样」，如果这个值是读快照算出来的，
+ * 两次快速操作就会用同一份旧快照互相覆盖（点「缓存」再点「站点数据」，
+ * 第一次的改动被冲掉）。这里把「怎么改」交给函数，在链上最新的状态里执行。
+ */
+export function updateSettings(mutate) {
   const run = writeChain.then(async () => {
     const current = await getSettings();
+    const patch = (await mutate(current)) || {};
     const next = {
       ...current,
       ...patch,
@@ -46,6 +54,10 @@ export function setSettings(patch) {
     () => {},
   );
   return run;
+}
+
+export function setSettings(patch) {
+  return updateSettings(() => patch);
 }
 
 export async function getCleanHistory() {

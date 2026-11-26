@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>商店截图</title>
+    <style>
+      :root {
+        --paper: #edeff3;
+        --page: #e2e6ee;
+        --sheet: #ffffff;
+        --rule: #d3dae4;
+        --ink: #0b0f16;
+        --ink-2: #4c5566;
+        --ink-3: #838d9c;
+        --signal: #1b54e4;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        background:
+          radial-gradient(900px 520px at 78% 12%, rgba(27, 84, 228, 0.07), transparent 62%),
+          var(--page);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+          'Microsoft YaHei', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stage {
+        display: flex;
+        align-items: center;
+        gap: 78px;
+        height: 800px;
+        padding: 0 76px;
+      }
+
+      .copy { flex: 1; min-width: 0; }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        color: var(--signal);
+      }
+      .eyebrow::before {
+        content: '';
+        width: 18px;
+        height: 2px;
+        border-radius: 1px;
+        background: var(--signal);
+      }
+
+      h1 {
+        margin: 22px 0 0;
+        font-size: 50px;
+        line-height: 1.16;
+        font-weight: 660;
+        letter-spacing: -0.02em;
+      }
+      h1 em {
+        font-style: normal;
+        color: var(--signal);
+      }
+
+      .lede {
+        margin: 20px 0 0;
+        max-width: 480px;
+        font-size: 17px;
+        line-height: 1.65;
+        color: var(--ink-2);
+      }
+
+      ul.points {
+        margin: 34px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 13px;
+      }
+      ul.points li {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--ink-2);
+      }
+      ul.points li::before {
+        content: '';
+        flex: none;
+        width: 7px;
+        height: 7px;
+        margin-top: 8px;
+        border-radius: 2px;
+        background: var(--signal);
+      }
+      ul.points b { color: var(--ink); font-weight: 600; }
+
+      /* 弹窗本体：等比放大后放进一个卡片里 */
+      .shot { flex: none; }
+      .shot-inner {
+        width: 413px;
+        height: 720px;
+      }
+      .frame {
+        width: 344px;
+        height: 600px;
+        overflow: hidden;
+        border-radius: 13px;
+        border: 1px solid var(--rule);
+        background: var(--paper);
+        box-shadow:
+          0 1px 2px rgba(11, 15, 22, 0.06),
+          0 18px 44px rgba(11, 15, 22, 0.16);
+        transform: scale(1.2);
+        transform-origin: top left;
+      }
+      .frame iframe {
+        width: 344px;
+        height: 600px;
+        border: 0;
+        display: block;
+      }
+    </style>
+    <script>
+      // 必须在 iframe 加载前写好状态：预览用的假 chrome API 从 sessionStorage 读设置。
+      (() => {
+        const q = new URLSearchParams(location.search);
+        const theme = q.get('theme') || 'light';
+        const scope = q.get('scope') || 'all';
+        const KEY = '__preview_storage__';
+        let cur = {};
+        try { cur = JSON.parse(sessionStorage.getItem(KEY) || '{}'); } catch { cur = {}; }
+        cur.settings = {
+          theme,
+          scope,
+          items: { cache: true, siteData: true, cookies: false, history: true },
+          since: 'all',
+          customOrigins: ['https://news.ycombinator.com'],
+          keepLogin: ['mail.google.com'],
+          auto: { onStartup: false, onExit: false, daily: false, dailyTime: '23:30' },
+        };
+        cur.cleanHistory = [
+          { ts: Date.now() - 3600_000, scope: 'current', freed: 4_812_000, historyRemoved: 12 },
+          { ts: Date.now() - 86_400_000, scope: 'all', freed: null, historyRemoved: 1843 },
+        ];
+        try { sessionStorage.setItem(KEY, JSON.stringify(cur)); } catch {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="copy">
+        <span class="eyebrow">CHROME 扩展</span>
+        <h1>一次点击<br />清掉<em>浏览痕迹</em></h1>
+        <p class="lede">
+          缓存、站点数据、Cookie、历史记录——四个开关，一个按钮。<br />
+          不联网，不上传，只有你能看见的干净。
+        </p>
+        <ul class="points">
+          <li><b>范围自己定</b>：全部网站、当前网站，或自己维护的名单。</li>
+          <li><b>清理看得见</b>：圆环走百分比进度，结束前绝不谎报清完。</li>
+          <li><b>登录能保住</b>：保留名单里的站，Cookie 与站点数据不动。</li>
+        </ul>
+      </div>
+      <div class="shot">
+        <div class="shot-inner">
+          <div class="frame"><iframe src="/src/popup.html" title="Clear Browsing Data" scrolling="no"></iframe></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

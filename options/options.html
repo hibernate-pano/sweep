@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="color-scheme" content="dark light" />
-    <title>Clear Browsing Data · 设置</title>
+    <title>Sweep · 设置</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
@@ -16,7 +16,7 @@
             <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
           </svg>
           <div>
-            <h1>Clear Browsing Data</h1>
+            <h1>Sweep</h1>
             <p class="sub">一键清理浏览足迹 · 设置</p>
           </div>
         </div>
@@ -54,7 +54,7 @@
         <div class="row">
           <div class="row-label">
             默认清理项
-            <span class="hint">Cookie 会导致网站被登出，默认不勾选</span>
+            <span class="hint">Cookie 和站点数据都可能让你退出登录。Cookie 默认不勾选；站点数据默认勾上——常去的网站加进下面的保留名单就不会被登出</span>
           </div>
           <div class="chips" id="item-chips" role="group" aria-label="默认清理项"></div>
         </div>
@@ -62,7 +62,7 @@
         <div class="row">
           <div class="row-label">
             默认时间范围
-            <span class="hint">只影响历史记录和缓存的清理范围</span>
+            <span class="hint">对所有清理项都生效：缓存、站点数据、Cookie、历史都只清这个时间范围内的</span>
           </div>
           <div class="seg" id="since-seg" role="radiogroup" aria-label="默认时间范围"></div>
         </div>
@@ -91,7 +91,7 @@
           名单里的网站不会被登出：Cookie 和本地存储（网站设置、本地会话）都保留，
           但缓存和历史记录照常清理。<br />
           注意按主域名生效：填 <code>mail.google.com</code> 会保留整个 <code>google.com</code>，
-          因为浏览器的 Cookie 无法按子域名单独删除。
+          因为浏览器的 Cookie 无法按子域名单独删除；该域名下所有用过的子域也一并保留。
         </p>
         <div class="tag-list" id="keep-list"></div>
         <form class="add-row" id="keep-form">

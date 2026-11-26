@@ -32,7 +32,9 @@ export const ITEM_DEFS = [
     key: 'cookies',
     label: 'Cookie',
     hint: 'Cookie 和自动填充保存的表单数据。清了会退出这些网站的登录。',
-    types: ['cookies', 'formData'],
+    // 只放 cookies：formData 不支持按来源过滤，跟 Cookie 放一次调用里
+    // 会被浏览器整个拒绝（详见 cleaner.js）。它由清理流程单独调用。
+    types: ['cookies'],
   },
   {
     key: 'history',

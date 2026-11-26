@@ -95,12 +95,3 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   const settings = await getSettings();
   await scheduleDaily(settings);
 });
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== 'clean-now') return false;
-  getSettings()
-    .then((settings) => autoClean('manual', settings))
-    .then((report) => sendResponse({ ok: true, report }))
-    .catch(() => sendResponse({ ok: false }));
-  return true;
-});

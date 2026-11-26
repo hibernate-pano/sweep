@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>隐私政策 — Sweep</title>
+    <meta
+      name="description"
+      content="Sweep 的隐私政策：不收集、不上传、不共享任何个人信息，不发起任何网络请求。"
+    />
+    <style>
+      :root {
+        --paper: #edeff3;
+        --sheet: #ffffff;
+        --rule: #dce1e8;
+        --ink: #0b0f16;
+        --ink-2: #545e6e;
+        --ink-3: #8b95a4;
+        --signal: #1b54e4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #121419;
+          --sheet: #1a1d23;
+          --rule: #262a32;
+          --ink: #edf0f5;
+          --ink-2: #98a2b0;
+          --ink-3: #6b7482;
+          --signal: #6e9bff;
+        }
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        padding: 0 20px 96px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+          'Microsoft YaHei', system-ui, sans-serif;
+        font-size: 16px;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+
+      header { padding: 72px 0 36px; border-bottom: 1px solid var(--rule); }
+      .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+      .mark { width: 22px; height: 22px; overflow: visible; }
+      .mark-track { fill: none; stroke: var(--rule); stroke-width: 2.2; }
+      .mark-arc { fill: none; stroke: var(--signal); stroke-width: 2.2; stroke-linecap: round; }
+      .mark-block { fill: var(--signal); }
+      .brand span { font-weight: 600; letter-spacing: 0.01em; }
+
+      h1 { margin: 0; font-size: 38px; line-height: 1.2; font-weight: 660; letter-spacing: -0.02em; }
+      .meta { margin: 14px 0 0; color: var(--ink-3); font-size: 14px; }
+
+      h2 {
+        margin: 48px 0 14px;
+        padding-top: 26px;
+        border-top: 1px solid var(--rule);
+        font-size: 21px;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+      }
+      h3 { margin: 30px 0 10px; font-size: 17px; font-weight: 600; }
+      p { margin: 0 0 16px; color: var(--ink-2); }
+      p strong { color: var(--ink); font-weight: 600; }
+      ul { margin: 0 0 16px; padding-left: 22px; color: var(--ink-2); }
+      li { margin-bottom: 8px; }
+      li strong { color: var(--ink); font-weight: 600; }
+
+      .lead {
+        margin: 26px 0 0;
+        padding: 20px 22px;
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        background: var(--sheet);
+        color: var(--ink);
+        font-size: 17px;
+        font-weight: 560;
+        line-height: 1.7;
+      }
+
+      table { width: 100%; margin: 6px 0 20px; border-collapse: collapse; font-size: 15px; }
+      th, td { padding: 11px 12px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+      th { color: var(--ink); font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+      td { color: var(--ink-2); }
+      td:first-child { color: var(--ink); font-weight: 560; white-space: nowrap; }
+
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--sheet);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+
+      a { color: var(--signal); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      footer {
+        margin-top: 60px;
+        padding-top: 26px;
+        border-top: 1px solid var(--rule);
+        color: var(--ink-3);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.6" class="mark-track" />
+            <path d="M12 3.4a8.6 8.6 0 1 1-8.6 8.6" class="mark-arc" />
+            <rect x="16.1" y="4.3" width="4.6" height="4.6" rx="1.5" class="mark-block" />
+          </svg>
+          <span>Sweep</span>
+        </div>
+        <h1>隐私政策</h1>
+        <p class="meta">最后更新：2026-11-26 ｜ 适用版本：1.0.0</p>
+      </header>
+
+      <p class="lead">
+        Sweep 是一个只在你点击时才动手的 Chrome 扩展。它的全部工作都在你的浏览器本地完成。
+        <strong>不收集、不上传、不共享任何个人信息，也不发起任何网络请求。</strong>
+      </p>
+
+      <p>
+        扩展没有服务器、没有账号、没有遥测。你装的这个扩展不会把你的浏览历史、Cookie
+        或任何东西发到任何地方。
+      </p>
+
+      <h2>它会碰哪些数据</h2>
+      <p>
+        Sweep 只在你按下「清空」按钮（或你打开的自动清理触发）之后才会<strong>删除</strong>浏览器本地的数据。
+        为了让你在按下按钮之前知道将要发生什么，它会先<strong>读取并统计</strong>下面几项：
+      </p>
+      <table>
+        <thead>
+          <tr><th>数据</th><th>读来做什么</th><th>读的范围</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>浏览历史</td><td>数出有多少条、涉及多少个网站</td><td>全部网站，或你选定的范围</td></tr>
+          <tr><td>Cookie</td><td>数出有多少条</td><td>全部网站，或你选定的范围</td></tr>
+          <tr><td>当前页面的 localStorage / IndexedDB / Cache Storage</td><td>数出这个站留下了多少条本地数据、占了多少字节</td><td><strong>只有你正在看的那个站</strong>，且只在你打开面板时</td></tr>
+        </tbody>
+      </table>
+      <p>
+        读到的这些数字只用来画面板上的圆环和那几行文字。<strong>它们不会离开你的设备。</strong>
+      </p>
+      <p>被删除的数据分四类，由你在面板上勾选：</p>
+      <ul>
+        <li><strong>缓存</strong> — 磁盘缓存、Cache Storage 离线缓存包</li>
+        <li><strong>站点数据</strong> — LocalStorage、IndexedDB、Service Worker、文件系统</li>
+        <li><strong>Cookie</strong> — Cookie，以及自动填充保存的表单数据</li>
+        <li><strong>历史记录</strong> — 浏览历史</li>
+      </ul>
+
+      <h2>哪些东西它不会碰</h2>
+      <ul>
+        <li><strong>书签</strong></li>
+        <li><strong>保存的密码</strong>（密码管理器里的）</li>
+        <li><strong>下载记录</strong></li>
+        <li><strong>其它扩展的数据</strong>（清理时显式排除了扩展来源）</li>
+        <li>
+          <strong>你账号里的东西</strong> —— 服务器上的聊天记录、订单、云端文件一概不动。
+          扩展只清浏览器本地这一份副本；你登录的网站服务器上留着什么，它管不着也碰不到。
+        </li>
+        <li><strong>自动填充的表单数据</strong>，除非你选的是「全部网站」范围（它不按站点存放，只能整体清）</li>
+      </ul>
+
+      <h2>保存的东西</h2>
+      <p>Sweep 在你的浏览器本地（<code>chrome.storage.local</code>）保存三样东西：</p>
+      <ul>
+        <li>你的设置（范围、勾了哪几项、时间范围、主题）</li>
+        <li>「保留登录」名单</li>
+        <li>最近 30 条清理记录（时间、范围、清了多少条）</li>
+      </ul>
+      <p>这些只存在你的机器上。清除浏览器数据或卸载扩展会一并清掉它们。</p>
+
+      <h2>网络</h2>
+      <p>
+        Sweep <strong>不发起任何网络请求</strong>。扩展包内没有任何远程代码，
+        也不会从网上下载并执行任何东西——你装的就是你运行的全部。
+      </p>
+
+      <h2>权限与理由</h2>
+      <table>
+        <thead>
+          <tr><th>权限</th><th>为什么需要</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>browsingData</td><td>删除浏览数据这件事本身</td></tr>
+          <tr><td>history</td><td>统计历史条数、按来源删除历史</td></tr>
+          <tr><td>cookies</td><td>统计 Cookie 条数</td></tr>
+          <tr><td>storage</td><td>保存你的设置（只存在本机）</td></tr>
+          <tr><td>scripting</td><td>在<strong>你正在看的那个页面</strong>里读取本地存储的条目数和占用，用来画那个圆环</td></tr>
+          <tr><td>alarms</td><td>你开启「每天定时」后到点触发</td></tr>
+          <tr><td>favicon</td><td>显示当前站点的网站图标</td></tr>
+          <tr><td>http://*/*、https://*/*</td><td>上面几项要按站点生效，就必须有站点访问权限。扩展只在需要时访问，且只读上面列出的那几项</td></tr>
+        </tbody>
+      </table>
+
+      <h2>自动清理</h2>
+      <p>
+        你可以在设置页打开三种触发方式：浏览器启动时、退出浏览器时、每天定时。
+        它们按你在设置页选的默认范围执行同样的删除操作，同样不联网、不上传。
+        默认范围是「当前网站」时，自动清理会直接跳过——后台没有「当前标签页」的概念，
+        悄悄降级成「清空整个浏览器」是不能接受的行为。
+      </p>
+
+      <h2>儿童</h2>
+      <p>Sweep 不收集任何人的个人信息，因此也不区分成年人和儿童。</p>
+
+      <h2>变更</h2>
+      <p>
+        这份政策会跟着扩展的版本一起更新。如果某个版本改变了数据处理方式，
+        这里会写清楚，并且<strong>商店页上的变更说明会同时更新</strong>。
+      </p>
+
+      <h2>联系</h2>
+      <p>问题或疑问：<a href="https://github.com/hibernate-pano/sweep/issues">github.com/hibernate-pano/sweep/issues</a></p>
+
+      <footer>
+        Sweep · 一个只做一件事的 Chrome 扩展 ·
+        <a href="https://github.com/hibernate-pano/sweep">源码</a>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -37,7 +37,6 @@
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   let usage = 4_812_000;
-  let cloudTotal = 34;
 
   // 假的历史：14 个站、一百多条记录，摊在最近 30 天里。
   // 这样「全部网站」的圆盘才有真实的形状可看。
@@ -104,7 +103,7 @@
 
   window.chrome = {
     runtime: {
-      getManifest: () => ({ version: '1.0.0', name: 'Clear Browsing Data' }),
+      getManifest: () => ({ version: '1.0.0', name: 'Sweep' }),
       openOptionsPage: () => {},
       onMessage: { addListener: () => {} },
       lastError: null,
@@ -137,9 +136,9 @@
       query: async () => [
         {
           id: 1,
-          url: new URLSearchParams(location.search).get('tab') || 'https://chatgpt.com/c/8f2a-91',
+          url: new URLSearchParams(location.search).get('tab') || 'https://news.ycombinator.com/item?id=1',
           active: true,
-          title: 'ChatGPT',
+          title: 'Hacker News',
         },
       ],
       reload: () => {},
@@ -149,18 +148,6 @@
       executeScript: async ({ func, args }) => {
         const src = String(func);
         if (src.includes('indexedDB.databases')) return [{ result: clone(probe()) }];
-        if (src.includes('backend-api/conversations')) {
-          if (args && args[0] === 'delete') {
-            const n = cloudTotal;
-            cloudTotal = 0;
-            deletedOnce = true;
-            return [{ result: { ok: true, total: n, deleted: n, error: null } }];
-          }
-          return [{ result: { ok: true, total: cloudTotal, deleted: 0, error: null } }];
-        }
-        if (src.includes('chat_conversations')) {
-          return [{ result: { ok: false, total: 0, deleted: 0, error: 'list:404' } }];
-        }
         return [{ result: null }];
       },
     },
@@ -187,15 +174,33 @@
       },
     },
     browsingData: {
-      remove: async () => {
+      remove: async (options = {}, types = {}) => {
         await new Promise((r) => setTimeout(r, 120));
+        // 真实 API：origin 过滤（origins / excludeOrigins）只支持 cookies 与存储类数据，
+        // formData 不在其中——两者放同一次调用里，整个调用会被拒绝。
+        const filtered =
+          (Array.isArray(options.origins) && options.origins.length > 0) ||
+          (Array.isArray(options.excludeOrigins) && options.excludeOrigins.length > 0);
+        if (filtered && types.formData) {
+          throw new Error(
+            "Invalid argument: 'formData' cannot be used together with origin filters.",
+          );
+        }
         usage = 0;
       },
     },
     history: {
       search: async (query = {}) => {
+        // 真实 API 里 text 是必填的：漏了会被直接拒绝，整个调用报错。
+        // 假实现照抄这条规则，漏了才能在预览里暴露出来。
+        if (typeof query.text !== 'string') {
+          throw new Error("Invalid arguments: 'text' is required.");
+        }
+        // startTime 不传时，浏览器默认只查最近 24 小时——照抄，否则又会漏。
+        const startTime =
+          query.startTime === undefined ? Date.now() - 24 * 60 * 60 * 1000 : query.startTime;
         let items = mockHistory.slice();
-        if (query.startTime) items = items.filter((i) => i.lastVisitTime >= query.startTime);
+        if (startTime) items = items.filter((i) => i.lastVisitTime >= startTime);
         if (query.endTime) items = items.filter((i) => i.lastVisitTime < query.endTime);
         if (query.text) {
           const t = String(query.text).toLowerCase();
